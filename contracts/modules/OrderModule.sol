@@ -261,7 +261,8 @@ contract OrderModule is IOrderModule {
             market,
             runtime.trade.newMarginUsd,
             runtime.pythPrice,
-            marketConfig
+            marketConfig,
+            globalConfig
         );
         stateUpdatePostSettlement(
             accountId,

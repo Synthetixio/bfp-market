@@ -81,7 +81,8 @@ contract LiquidationModule is ILiquidationModule {
             market,
             Margin.getMarginUsd(accountId, market, oraclePrice),
             oraclePrice,
-            PerpMarketConfiguration.load(marketId)
+            PerpMarketConfiguration.load(marketId),
+            PerpMarketConfiguration.load()
         );
         if (!isLiquidatable) {
             revert ErrorUtil.CannotLiquidatePosition();
@@ -196,7 +197,8 @@ contract LiquidationModule is ILiquidationModule {
         liqReward = Position.getLiquidationReward(
             MathUtil.abs(market.positions[accountId].size).to128(),
             market.getOraclePrice(),
-            PerpMarketConfiguration.load(marketId)
+            PerpMarketConfiguration.load(marketId),
+            PerpMarketConfiguration.load()
         );
         keeperFee = Position.getLiquidationKeeperFee();
     }
@@ -226,7 +228,8 @@ contract LiquidationModule is ILiquidationModule {
                 market,
                 Margin.getMarginUsd(accountId, market, oraclePrice),
                 oraclePrice,
-                PerpMarketConfiguration.load(marketId)
+                PerpMarketConfiguration.load(marketId),
+                PerpMarketConfiguration.load()
             );
     }
 
@@ -239,10 +242,12 @@ contract LiquidationModule is ILiquidationModule {
     ) external view returns (uint256 im, uint256 mm) {
         PerpMarket.Data storage market = PerpMarket.exists(marketId);
         PerpMarketConfiguration.Data storage marketConfig = PerpMarketConfiguration.load(marketId);
+        PerpMarketConfiguration.GlobalData storage globalConfig = PerpMarketConfiguration.load();
         (im, mm, ) = Position.getLiquidationMarginUsd(
             market.positions[accountId].size,
             market.getOraclePrice(),
-            marketConfig
+            marketConfig,
+            globalConfig
         );
     }
 
@@ -258,7 +263,8 @@ contract LiquidationModule is ILiquidationModule {
                 market,
                 Margin.getMarginUsd(accountId, market, oraclePrice),
                 oraclePrice,
-                PerpMarketConfiguration.load(marketId)
+                PerpMarketConfiguration.load(marketId),
+                PerpMarketConfiguration.load()
             );
     }
 }

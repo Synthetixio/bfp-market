@@ -117,7 +117,8 @@ library Position {
         Position.Data memory newPosition,
         uint256 marginUsd,
         uint256 price,
-        PerpMarketConfiguration.Data storage marketConfig
+        PerpMarketConfiguration.Data storage marketConfig,
+        PerpMarketConfiguration.GlobalData storage globalConfig
     ) internal view {
         (uint256 healthFactor, , , ) = getHealthData(
             market,
@@ -126,7 +127,8 @@ library Position {
             newPosition.entryFundingAccrued,
             marginUsd,
             price,
-            marketConfig
+            marketConfig,
+            globalConfig
         );
 
         if (healthFactor <= DecimalMath.UNIT) {
@@ -149,6 +151,7 @@ library Position {
 
         Position.Data storage currentPosition = market.positions[accountId];
         PerpMarketConfiguration.Data storage marketConfig = PerpMarketConfiguration.load(market.id);
+        PerpMarketConfiguration.GlobalData storage globalConfig = PerpMarketConfiguration.load();
         uint256 marginUsd = Margin.getMarginUsd(accountId, market, params.fillPrice);
 
         // --- Existing position validation --- //
@@ -161,7 +164,7 @@ library Position {
             }
 
             // Determine if the currentPosition can immediately be liquidated.
-            if (isLiquidatable(currentPosition, market, marginUsd, params.fillPrice, marketConfig)) {
+            if (isLiquidatable(currentPosition, market, marginUsd, params.fillPrice, marketConfig, globalConfig)) {
                 revert ErrorUtil.CanLiquidatePosition();
             }
 
@@ -169,7 +172,12 @@ library Position {
             //
             // NOTE: The use of fillPrice and not oraclePrice to perform calculations below. Also consider this is the
             // "raw" remaining margin which does not account for fees (liquidation fees, penalties, liq premium fees etc.).
-            (uint256 imcp, , ) = getLiquidationMarginUsd(currentPosition.size, params.fillPrice, marketConfig);
+            (uint256 imcp, , ) = getLiquidationMarginUsd(
+                currentPosition.size,
+                params.fillPrice,
+                marketConfig,
+                globalConfig
+            );
             if (marginUsd < imcp) {
                 revert ErrorUtil.InsufficientMargin();
             }
@@ -197,7 +205,7 @@ library Position {
         // avoid this completely due to positions at min margin would never be allowed to lower size.
         bool positionDecreasing = MathUtil.sameSide(currentPosition.size, newPosition.size) &&
             MathUtil.abs(newPosition.size) < MathUtil.abs(currentPosition.size);
-        (uint256 imnp, , ) = getLiquidationMarginUsd(newPosition.size, params.fillPrice, marketConfig);
+        (uint256 imnp, , ) = getLiquidationMarginUsd(newPosition.size, params.fillPrice, marketConfig, globalConfig);
 
         // `marginUsd` is the previous position margin (which includes accruedFeesUsd deducted with open
         // position). We `-fee and -keeperFee` here because the new position would have incurred additional fees if
@@ -211,7 +219,14 @@ library Position {
         }
 
         // Check new position can't just be instantly liquidated.
-        validateNextPositionIsLiquidatable(market, newPosition, newMarginUsd, params.fillPrice, marketConfig);
+        validateNextPositionIsLiquidatable(
+            market,
+            newPosition,
+            newMarginUsd,
+            params.fillPrice,
+            marketConfig,
+            globalConfig
+        );
 
         // Check the new position hasn't hit max OI on either side.
         validateMaxOi(marketConfig.maxMarketSize, market.skew, market.size, currentPosition.size, newPosition.size);
@@ -288,7 +303,7 @@ library Position {
 
         // Determine the resulting position post liqudation.
         liqSize = MathUtil.min(runtime.remainingCapacity, runtime.oldPositionSizeAbs).to128();
-        liqReward = getLiquidationReward(liqSize, price, marketConfig);
+        liqReward = getLiquidationReward(liqSize, price, marketConfig, globalConfig);
         keeperFee = getLiquidationKeeperFee();
         newPosition = Position.Data(
             oldPosition.size > 0 ? oldPosition.size - liqSize.toInt() : oldPosition.size + liqSize.toInt(),
@@ -307,9 +322,17 @@ library Position {
     function getLiquidationReward(
         uint128 size,
         uint256 price,
-        PerpMarketConfiguration.Data storage marketConfig
+        PerpMarketConfiguration.Data storage marketConfig,
+        PerpMarketConfiguration.GlobalData storage globalConfig
     ) internal view returns (uint256) {
-        return size.mulDecimal(price).mulDecimal(marketConfig.liquidationRewardPercent);
+        return
+            MathUtil.max(
+                MathUtil.min(
+                    globalConfig.minKeeperFeeUsd,
+                    size.mulDecimal(price).mulDecimal(marketConfig.liquidationRewardPercent)
+                ),
+                globalConfig.maxKeeperFeeUsd
+            );
     }
 
     /**
@@ -327,7 +350,8 @@ library Position {
     function getLiquidationMarginUsd(
         int128 positionSize,
         uint256 price,
-        PerpMarketConfiguration.Data storage marketConfig
+        PerpMarketConfiguration.Data storage marketConfig,
+        PerpMarketConfiguration.GlobalData storage globalConfig
     ) internal view returns (uint256 im, uint256 mm, uint256 liqReward) {
         uint128 absSize = MathUtil.abs(positionSize).to128();
         uint256 notional = absSize.mulDecimal(price);
@@ -336,7 +360,7 @@ library Position {
             marketConfig.minMarginRatio;
         uint256 mmr = imr.mulDecimal(marketConfig.maintenanceMarginScalar);
 
-        liqReward = getLiquidationReward(absSize, price, marketConfig);
+        liqReward = getLiquidationReward(absSize, price, marketConfig, globalConfig);
         im = notional.mulDecimal(imr) + marketConfig.minMarginUsd;
         mm = notional.mulDecimal(mmr) + marketConfig.minMarginUsd + liqReward + getLiquidationKeeperFee();
     }
@@ -369,7 +393,8 @@ library Position {
         int256 positionEntryFundingAccrued,
         uint256 marginUsd,
         uint256 price,
-        PerpMarketConfiguration.Data storage marketConfig
+        PerpMarketConfiguration.Data storage marketConfig,
+        PerpMarketConfiguration.GlobalData storage globalConfig
     ) internal view returns (uint256 healthFactor, int256 accruedFunding, int256 pnl, uint256 remainingMarginUsd) {
         int256 netFundingPerUnit = market.getNextFundingAccrued(price) - positionEntryFundingAccrued;
         accruedFunding = positionSize.mulDecimal(netFundingPerUnit);
@@ -384,7 +409,7 @@ library Position {
         remainingMarginUsd = marginUsd;
 
         // margin / mm <= 1 means liquidation.
-        (, uint256 mm, ) = getLiquidationMarginUsd(positionSize, price, marketConfig);
+        (, uint256 mm, ) = getLiquidationMarginUsd(positionSize, price, marketConfig, globalConfig);
         healthFactor = remainingMarginUsd.divDecimal(mm);
     }
 
@@ -398,10 +423,20 @@ library Position {
         PerpMarket.Data storage market,
         uint256 marginUsd,
         uint256 price,
-        PerpMarketConfiguration.Data storage marketConfig
+        PerpMarketConfiguration.Data storage marketConfig,
+        PerpMarketConfiguration.GlobalData storage globalConfig
     ) internal view returns (uint256 healthFactor, int256 accruedFunding, int256 pnl, uint256 remainingMarginUsd) {
         return
-            getHealthData(market, self.size, self.entryPrice, self.entryFundingAccrued, marginUsd, price, marketConfig);
+            getHealthData(
+                market,
+                self.size,
+                self.entryPrice,
+                self.entryFundingAccrued,
+                marginUsd,
+                price,
+                marketConfig,
+                globalConfig
+            );
     }
 
     /**
@@ -412,7 +447,8 @@ library Position {
         PerpMarket.Data storage market,
         uint256 marginUsd,
         uint256 price,
-        PerpMarketConfiguration.Data storage marketConfig
+        PerpMarketConfiguration.Data storage marketConfig,
+        PerpMarketConfiguration.GlobalData storage globalConfig
     ) internal view returns (uint256) {
         (uint256 healthFactor, , , ) = getHealthData(
             market,
@@ -421,7 +457,8 @@ library Position {
             self.entryFundingAccrued,
             marginUsd,
             price,
-            marketConfig
+            marketConfig,
+            globalConfig
         );
         return healthFactor;
     }
@@ -434,13 +471,14 @@ library Position {
         PerpMarket.Data storage market,
         uint256 marginUsd,
         uint256 price,
-        PerpMarketConfiguration.Data storage marketConfig
+        PerpMarketConfiguration.Data storage marketConfig,
+        PerpMarketConfiguration.GlobalData storage globalConfig
     ) internal view returns (bool) {
         if (self.size == 0) {
             return false;
         }
 
-        (uint256 healthFactor, , , ) = getHealthData(self, market, marginUsd, price, marketConfig);
+        (uint256 healthFactor, , , ) = getHealthData(self, market, marginUsd, price, marketConfig, globalConfig);
 
         return healthFactor <= DecimalMath.UNIT;
     }

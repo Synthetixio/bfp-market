@@ -35,13 +35,13 @@ contract MarginModule is IMarginModule {
         uint256 marginUsd = Margin.getMarginUsd(accountId, market, oraclePrice);
 
         PerpMarketConfiguration.Data storage marketConfig = PerpMarketConfiguration.load(market.id);
-
+        PerpMarketConfiguration.GlobalData storage globalConfig = PerpMarketConfiguration.load();
         // Ensure does not lead to instant liquidation.
-        if (position.isLiquidatable(market, marginUsd, oraclePrice, marketConfig)) {
+        if (position.isLiquidatable(market, marginUsd, oraclePrice, marketConfig, globalConfig)) {
             revert ErrorUtil.CanLiquidatePosition();
         }
 
-        (uint256 im, , ) = Position.getLiquidationMarginUsd(position.size, oraclePrice, marketConfig);
+        (uint256 im, , ) = Position.getLiquidationMarginUsd(position.size, oraclePrice, marketConfig, globalConfig);
         if (marginUsd < im) {
             revert ErrorUtil.InsufficientMargin();
         }
