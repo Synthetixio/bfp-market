@@ -29,19 +29,18 @@ contract MarginModule is IMarginModule {
     function validatePositionPostWithdraw(
         uint128 accountId,
         Position.Data storage position,
-        PerpMarket.Data storage market
+        PerpMarket.Data storage market,
+        PerpMarketConfiguration.CombinedStruct memory combinedMarketConfig
     ) private view {
         uint256 oraclePrice = market.getOraclePrice();
         uint256 marginUsd = Margin.getMarginUsd(accountId, market, oraclePrice);
 
-        PerpMarketConfiguration.Data storage marketConfig = PerpMarketConfiguration.load(market.id);
-
         // Ensure does not lead to instant liquidation.
-        if (position.isLiquidatable(market, marginUsd, oraclePrice, marketConfig)) {
+        if (position.isLiquidatable(market, marginUsd, oraclePrice, combinedMarketConfig)) {
             revert ErrorUtil.CanLiquidatePosition();
         }
 
-        (uint256 im, , ) = Position.getLiquidationMarginUsd(position.size, oraclePrice, marketConfig);
+        (uint256 im, , ) = Position.getLiquidationMarginUsd(position.size, oraclePrice, combinedMarketConfig);
         if (marginUsd < im) {
             revert ErrorUtil.InsufficientMargin();
         }
@@ -53,15 +52,15 @@ contract MarginModule is IMarginModule {
     function validateOrderAvailability(
         uint128 accountId,
         uint128 marketId,
-        PerpMarket.Data storage market,
-        PerpMarketConfiguration.GlobalData storage globalConfig
+        uint128 maxOrderAge,
+        PerpMarket.Data storage market
     ) private {
         Order.Data storage order = market.orders[accountId];
 
         // Margin cannot be modified if order is currently pending.
         if (order.sizeDelta != 0) {
             // Check if this order can be cancelled. If so, cancel and then proceed.
-            if (block.timestamp > order.commitmentTime + globalConfig.maxOrderAge) {
+            if (block.timestamp > order.commitmentTime + maxOrderAge) {
                 delete market.orders[accountId];
                 emit OrderCanceled(accountId, marketId, order.commitmentTime);
             } else {
@@ -77,13 +76,13 @@ contract MarginModule is IMarginModule {
         uint128 marketId,
         uint256 amount,
         uint128 synthMarketId,
-        PerpMarketConfiguration.GlobalData storage globalConfig
+        PerpMarketConfiguration.CombinedStruct memory combinedMarketConfig
     ) private {
         if (synthMarketId == SYNTHETIX_USD_MARKET_ID) {
-            globalConfig.synthetix.withdrawMarketUsd(marketId, msg.sender, amount);
+            combinedMarketConfig.globalData.synthetix.withdrawMarketUsd(marketId, msg.sender, amount);
         } else {
-            ITokenModule synth = ITokenModule(globalConfig.spotMarket.getSynth(synthMarketId));
-            globalConfig.synthetix.withdrawMarketCollateral(marketId, address(synth), amount);
+            ITokenModule synth = ITokenModule(combinedMarketConfig.globalData.spotMarket.getSynth(synthMarketId));
+            combinedMarketConfig.globalData.synthetix.withdrawMarketCollateral(marketId, address(synth), amount);
             synth.transferFrom(address(this), msg.sender, amount);
         }
         emit MarginWithdraw(address(this), msg.sender, amount, synthMarketId);
@@ -96,7 +95,7 @@ contract MarginModule is IMarginModule {
         uint128 marketId,
         uint256 amount,
         uint128 synthMarketId,
-        PerpMarketConfiguration.GlobalData storage globalConfig
+        PerpMarketConfiguration.GlobalData memory globalConfig
     ) private {
         if (synthMarketId == SYNTHETIX_USD_MARKET_ID) {
             globalConfig.synthetix.depositMarketUsd(marketId, msg.sender, amount);
@@ -116,10 +115,11 @@ contract MarginModule is IMarginModule {
     function withdrawAllCollateral(uint128 accountId, uint128 marketId) external {
         Account.loadAccountAndValidatePermission(accountId, AccountRBAC._PERPS_MODIFY_COLLATERAL_PERMISSION);
         PerpMarket.Data storage market = PerpMarket.exists(marketId);
-        PerpMarketConfiguration.GlobalData storage globalConfig = PerpMarketConfiguration.load();
+        PerpMarketConfiguration.CombinedStruct memory combinedMarketConfig = PerpMarketConfiguration
+            .getCombinedMarketConfiguration(marketId);
 
         // Prevent collateral transfers when there's a pending order.
-        validateOrderAvailability(accountId, marketId, market, globalConfig);
+        validateOrderAvailability(accountId, marketId, combinedMarketConfig.globalData.maxOrderAge, market);
 
         // Position is frozen due to prior flagged for liquidation.
         if (market.flaggedLiquidations[accountId] != address(0)) {
@@ -155,7 +155,7 @@ contract MarginModule is IMarginModule {
             market.depositedCollateral[synthMarketId] -= available;
 
             // Withdraw all available collateral for this `synthMarketId`.
-            withdrawAndTransfer(marketId, available, synthMarketId, globalConfig);
+            withdrawAndTransfer(marketId, available, synthMarketId, combinedMarketConfig);
         }
 
         // No collateral has been withdrawn. Revert instead of noop.
@@ -173,7 +173,7 @@ contract MarginModule is IMarginModule {
         PerpMarketConfiguration.GlobalData storage globalConfig = PerpMarketConfiguration.load();
 
         // Prevent collateral transfers when there's a pending order.
-        validateOrderAvailability(accountId, marketId, market, globalConfig);
+        validateOrderAvailability(accountId, marketId, globalConfig.maxOrderAge, market);
 
         // Prevent collateral transfers when there's a pending order.
         if (market.orders[accountId].sizeDelta != 0) {
@@ -192,10 +192,9 @@ contract MarginModule is IMarginModule {
         uint256 totalMarketAvailableAmount = market.depositedCollateral[synthMarketId];
 
         Margin.CollateralType storage collateral = globalMarginConfig.supported[synthMarketId];
-        uint256 maxAllowable = collateral.maxAllowable;
 
         // Prevent any operations if this synth isn't supported as collateral.
-        if (maxAllowable == 0) {
+        if (collateral.maxAllowable == 0) {
             revert ErrorUtil.UnsupportedCollateral(synthMarketId);
         }
 
@@ -210,13 +209,16 @@ contract MarginModule is IMarginModule {
         // > 0 is a deposit whilst < 0 is a withdrawal.
         if (amountDelta > 0) {
             // Verify whether this will exceed the maximum allowable collateral amount.
-            if (totalMarketAvailableAmount + absAmountDelta > maxAllowable) {
-                revert ErrorUtil.MaxCollateralExceeded(absAmountDelta, maxAllowable);
+            if (totalMarketAvailableAmount + absAmountDelta > collateral.maxAllowable) {
+                revert ErrorUtil.MaxCollateralExceeded(absAmountDelta, collateral.maxAllowable);
             }
             accountMargin.collaterals[synthMarketId] += absAmountDelta;
             market.depositedCollateral[synthMarketId] += absAmountDelta;
             transferAndDeposit(marketId, absAmountDelta, synthMarketId, globalConfig);
         } else {
+            // TODO Deposit only needs global, Unclear if we make deposit or withdraw cheaper.. If I just move this line up withdraw is cheaper
+            PerpMarketConfiguration.CombinedStruct memory combinedMarketConfig = PerpMarketConfiguration
+                .getCombinedMarketConfiguration(marketId);
             // Verify the collateral previously associated to this account is enough to cover withdrawals.
             if (accountMargin.collaterals[synthMarketId] < absAmountDelta) {
                 revert ErrorUtil.InsufficientCollateral(synthMarketId, totalMarketAvailableAmount, absAmountDelta);
@@ -231,10 +233,10 @@ contract MarginModule is IMarginModule {
             // collateral amounts.
             Position.Data storage position = market.positions[accountId];
             if (position.size != 0) {
-                validatePositionPostWithdraw(accountId, position, market);
+                validatePositionPostWithdraw(accountId, position, market, combinedMarketConfig);
             }
 
-            withdrawAndTransfer(marketId, absAmountDelta, synthMarketId, globalConfig);
+            withdrawAndTransfer(marketId, absAmountDelta, synthMarketId, combinedMarketConfig);
         }
     }
 

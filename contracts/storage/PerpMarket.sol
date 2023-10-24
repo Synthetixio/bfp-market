@@ -268,10 +268,9 @@ library PerpMarket {
      */
     function getRemainingLiquidatableSizeCapacity(
         PerpMarket.Data storage self,
-        PerpMarketConfiguration.Data storage marketConfig
+        PerpMarketConfiguration.Data memory marketConfig
     ) internal view returns (uint128 maxLiquidatableCapacity, uint128 remainingCapacity, uint128 lastLiquidationTime) {
-        // How do we calculcate `maxLiquidatableCapacity`?
-        //
+        // How do we calculcate `maxLiquidatableCapacity`?//
         // As an example, assume the following example parameters for a ETH/USD market.
         //
         // 100,000         skewScale

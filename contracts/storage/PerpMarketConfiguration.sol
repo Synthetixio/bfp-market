@@ -116,4 +116,13 @@ library PerpMarketConfiguration {
             d.slot := s
         }
     }
+
+    struct CombinedStruct {
+        GlobalData globalData;
+        Data marketData;
+    }
+
+    function getCombinedMarketConfiguration(uint128 marketId) internal view returns (CombinedStruct memory) {
+        return CombinedStruct(load(), load(marketId));
+    }
 }

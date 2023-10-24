@@ -47,15 +47,15 @@ contract OrderModule is IOrderModule {
     function validateOrderAvailability(
         uint128 accountId,
         uint128 marketId,
-        PerpMarket.Data storage market,
-        PerpMarketConfiguration.GlobalData storage globalConfig
+        uint128 maxOrderAge,
+        PerpMarket.Data storage market
     ) private {
         Order.Data storage order = market.orders[accountId];
 
         // A new order cannot be submitted if one is already pending.
         if (order.sizeDelta != 0) {
             // Check if this order can be cancelled. If so, cancel and then proceed.
-            if (block.timestamp > order.commitmentTime + globalConfig.maxOrderAge) {
+            if (block.timestamp > order.commitmentTime + maxOrderAge) {
                 delete market.orders[accountId];
                 emit OrderCanceled(accountId, marketId, order.commitmentTime);
             } else {
@@ -69,7 +69,7 @@ contract OrderModule is IOrderModule {
      */
     function validateOrderPriceReadiness(
         PerpMarket.Data storage market,
-        PerpMarketConfiguration.GlobalData storage globalConfig,
+        PerpMarketConfiguration.GlobalData memory globalConfig,
         uint256 commitmentTime,
         uint256 publishTime,
         Position.TradeParams memory params
@@ -185,13 +185,12 @@ contract OrderModule is IOrderModule {
         uint256 keeperFeeBufferUsd
     ) external {
         Account.loadAccountAndValidatePermission(accountId, AccountRBAC._PERPS_COMMIT_ASYNC_ORDER_PERMISSION);
+        PerpMarketConfiguration.CombinedStruct memory combinedMarketConfig = PerpMarketConfiguration
+            .getCombinedMarketConfiguration(marketId);
 
-        PerpMarketConfiguration.GlobalData storage globalConfig = PerpMarketConfiguration.load();
         PerpMarket.Data storage market = PerpMarket.exists(marketId);
-        validateOrderAvailability(accountId, marketId, market, globalConfig);
+        validateOrderAvailability(accountId, marketId, combinedMarketConfig.globalData.maxOrderAge, market);
         uint256 oraclePrice = market.getOraclePrice();
-
-        PerpMarketConfiguration.Data storage marketConfig = PerpMarketConfiguration.load(marketId);
 
         // Validates whether this order would lead to a valid 'next' next position (plethora of revert errors).
         //
@@ -204,12 +203,13 @@ contract OrderModule is IOrderModule {
             Position.TradeParams(
                 sizeDelta,
                 oraclePrice,
-                Order.getFillPrice(market.skew, marketConfig.skewScale, sizeDelta, oraclePrice),
-                marketConfig.makerFee,
-                marketConfig.takerFee,
+                Order.getFillPrice(market.skew, combinedMarketConfig.marketData.skewScale, sizeDelta, oraclePrice),
+                combinedMarketConfig.marketData.makerFee,
+                combinedMarketConfig.marketData.takerFee,
                 limitPrice,
                 keeperFeeBufferUsd
-            )
+            ),
+            combinedMarketConfig
         );
 
         market.orders[accountId].update(Order.Data(sizeDelta, block.timestamp, limitPrice, keeperFeeBufferUsd));
@@ -229,9 +229,10 @@ contract OrderModule is IOrderModule {
         if (order.sizeDelta == 0) {
             revert ErrorUtil.OrderNotFound();
         }
-
-        PerpMarketConfiguration.GlobalData storage globalConfig = PerpMarketConfiguration.load();
-        PerpMarketConfiguration.Data storage marketConfig = PerpMarketConfiguration.load(marketId);
+        PerpMarketConfiguration.CombinedStruct memory combinedMarketConfig = PerpMarketConfiguration
+            .getCombinedMarketConfiguration(marketId);
+        // PerpMarketConfiguration.GlobalData storage globalConfig = PerpMarketConfiguration.load();
+        // PerpMarketConfiguration.Data storage marketConfig = PerpMarketConfiguration.load(marketId);
 
         // TODO: This can be optimized as not all settlements may need the Pyth priceUpdateData.
         //
@@ -240,28 +241,39 @@ contract OrderModule is IOrderModule {
         PerpMarket.updatePythPrice(priceUpdateData);
 
         (runtime.pythPrice, runtime.publishTime) = market.getPythPrice(order.commitmentTime);
-        runtime.fillPrice = Order.getFillPrice(market.skew, marketConfig.skewScale, order.sizeDelta, runtime.pythPrice);
+        runtime.fillPrice = Order.getFillPrice(
+            market.skew,
+            combinedMarketConfig.marketData.skewScale,
+            order.sizeDelta,
+            runtime.pythPrice
+        );
         runtime.params = Position.TradeParams(
             order.sizeDelta,
             runtime.pythPrice,
             runtime.fillPrice,
-            marketConfig.makerFee,
-            marketConfig.takerFee,
+            combinedMarketConfig.marketData.makerFee,
+            combinedMarketConfig.marketData.takerFee,
             order.limitPrice,
             order.keeperFeeBufferUsd
         );
 
-        validateOrderPriceReadiness(market, globalConfig, order.commitmentTime, runtime.publishTime, runtime.params);
+        validateOrderPriceReadiness(
+            market,
+            combinedMarketConfig.globalData,
+            order.commitmentTime,
+            runtime.publishTime,
+            runtime.params
+        );
 
         recomputeFunding(market, runtime.pythPrice);
 
-        runtime.trade = Position.validateTrade(accountId, market, runtime.params);
+        runtime.trade = Position.validateTrade(accountId, market, runtime.params, combinedMarketConfig);
 
         (, runtime.accruedFunding, runtime.pnl, ) = market.positions[accountId].getHealthData(
             market,
             runtime.trade.newMarginUsd,
             runtime.pythPrice,
-            marketConfig
+            combinedMarketConfig
         );
         stateUpdatePostSettlement(
             accountId,
@@ -275,7 +287,7 @@ contract OrderModule is IOrderModule {
 
         // If maxKeeperFee configured to zero then we want to rpevent withdraws of 0.
         if (runtime.trade.keeperFee > 0) {
-            globalConfig.synthetix.withdrawMarketUsd(marketId, msg.sender, runtime.trade.keeperFee);
+            combinedMarketConfig.globalData.synthetix.withdrawMarketUsd(marketId, msg.sender, runtime.trade.keeperFee);
         }
 
         emit OrderSettled(

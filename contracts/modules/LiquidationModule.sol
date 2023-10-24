@@ -28,7 +28,7 @@ contract LiquidationModule is ILiquidationModule {
         uint128 marketId,
         PerpMarket.Data storage market,
         uint256 oraclePrice,
-        PerpMarketConfiguration.GlobalData storage globalConfig
+        PerpMarketConfiguration.CombinedStruct memory combinedMarketConfig
     )
         private
         returns (
@@ -45,8 +45,7 @@ contract LiquidationModule is ILiquidationModule {
         (oldPosition, newPosition, liqSize, liqReward, keeperFee) = Position.validateLiquidation(
             accountId,
             market,
-            PerpMarketConfiguration.load(marketId),
-            globalConfig,
+            combinedMarketConfig,
             oraclePrice
         );
 
@@ -74,6 +73,8 @@ contract LiquidationModule is ILiquidationModule {
         if (position.size == 0) {
             revert ErrorUtil.PositionNotFound();
         }
+        PerpMarketConfiguration.CombinedStruct memory combinedMarketConfig = PerpMarketConfiguration
+            .getCombinedMarketConfiguration(marketId);
 
         // Cannot flag for liquidation unless they are liquidatable.
         uint256 oraclePrice = market.getOraclePrice();
@@ -81,7 +82,7 @@ contract LiquidationModule is ILiquidationModule {
             market,
             Margin.getMarginUsd(accountId, market, oraclePrice),
             oraclePrice,
-            PerpMarketConfiguration.load(marketId)
+            combinedMarketConfig
         );
         if (!isLiquidatable) {
             revert ErrorUtil.CannotLiquidatePosition();
@@ -125,14 +126,15 @@ contract LiquidationModule is ILiquidationModule {
         }
 
         uint256 oraclePrice = market.getOraclePrice();
-        PerpMarketConfiguration.GlobalData storage globalConfig = PerpMarketConfiguration.load();
+        PerpMarketConfiguration.CombinedStruct memory combinedMarketConfig = PerpMarketConfiguration
+            .getCombinedMarketConfiguration(marketId);
 
         (, Position.Data memory newPosition, uint256 liqReward, uint256 keeperFee) = updateMarketPreLiquidation(
             accountId,
             marketId,
             market,
             oraclePrice,
-            globalConfig
+            combinedMarketConfig
         );
 
         address flagger = market.flaggedLiquidations[accountId];
@@ -160,14 +162,18 @@ contract LiquidationModule is ILiquidationModule {
         // - If flagger/liquidator are different, distribute fees separately
         //
         // NOTE: The endorsed liquidator receives _zero_ liquidation rewards (but does receive a keeperFee for upkeep).
-        if (flagger == globalConfig.keeperLiquidationEndorsed) {
-            globalConfig.synthetix.withdrawMarketUsd(marketId, msg.sender, keeperFee);
+        if (flagger == combinedMarketConfig.globalData.keeperLiquidationEndorsed) {
+            combinedMarketConfig.globalData.synthetix.withdrawMarketUsd(marketId, msg.sender, keeperFee);
         } else {
             if (msg.sender == flagger) {
-                globalConfig.synthetix.withdrawMarketUsd(marketId, msg.sender, keeperFee + liqReward);
+                combinedMarketConfig.globalData.synthetix.withdrawMarketUsd(
+                    marketId,
+                    msg.sender,
+                    keeperFee + liqReward
+                );
             } else {
-                globalConfig.synthetix.withdrawMarketUsd(marketId, flagger, liqReward);
-                globalConfig.synthetix.withdrawMarketUsd(marketId, msg.sender, keeperFee);
+                combinedMarketConfig.globalData.synthetix.withdrawMarketUsd(marketId, flagger, liqReward);
+                combinedMarketConfig.globalData.synthetix.withdrawMarketUsd(marketId, msg.sender, keeperFee);
             }
         }
 
@@ -193,10 +199,12 @@ contract LiquidationModule is ILiquidationModule {
         uint128 marketId
     ) external view returns (uint256 liqReward, uint256 keeperFee) {
         PerpMarket.Data storage market = PerpMarket.exists(marketId);
+        PerpMarketConfiguration.CombinedStruct memory combinedMarketConfig = PerpMarketConfiguration
+            .getCombinedMarketConfiguration(marketId);
         liqReward = Position.getLiquidationReward(
             MathUtil.abs(market.positions[accountId].size).to128(),
             market.getOraclePrice(),
-            PerpMarketConfiguration.load(marketId)
+            combinedMarketConfig
         );
         keeperFee = Position.getLiquidationKeeperFee();
     }
@@ -221,12 +229,13 @@ contract LiquidationModule is ILiquidationModule {
     function isPositionLiquidatable(uint128 accountId, uint128 marketId) external view returns (bool) {
         PerpMarket.Data storage market = PerpMarket.exists(marketId);
         uint256 oraclePrice = market.getOraclePrice();
+
         return
             market.positions[accountId].isLiquidatable(
                 market,
                 Margin.getMarginUsd(accountId, market, oraclePrice),
                 oraclePrice,
-                PerpMarketConfiguration.load(marketId)
+                PerpMarketConfiguration.getCombinedMarketConfiguration(marketId)
             );
     }
 
@@ -238,11 +247,10 @@ contract LiquidationModule is ILiquidationModule {
         uint128 marketId
     ) external view returns (uint256 im, uint256 mm) {
         PerpMarket.Data storage market = PerpMarket.exists(marketId);
-        PerpMarketConfiguration.Data storage marketConfig = PerpMarketConfiguration.load(marketId);
         (im, mm, ) = Position.getLiquidationMarginUsd(
             market.positions[accountId].size,
             market.getOraclePrice(),
-            marketConfig
+            PerpMarketConfiguration.getCombinedMarketConfiguration(marketId)
         );
     }
 
@@ -258,7 +266,7 @@ contract LiquidationModule is ILiquidationModule {
                 market,
                 Margin.getMarginUsd(accountId, market, oraclePrice),
                 oraclePrice,
-                PerpMarketConfiguration.load(marketId)
+                PerpMarketConfiguration.getCombinedMarketConfiguration(marketId)
             );
     }
 }
