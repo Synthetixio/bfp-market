@@ -36,6 +36,7 @@ import {
   sleep,
   setMarketConfiguration,
   setBaseFeePerGas,
+  logNumber,
 } from '../../helpers';
 import { Market, Trader } from '../../typed';
 import { assertEvents } from '../../assert';
@@ -616,38 +617,226 @@ describe('LiquidationModule', () => {
       assertBn.isZero(d2.size);
       assertBn.isZero(d2.skew);
     });
+    // loop 20 times
 
-    it('should update reported debt (debtCorrection)', async () => {
-      const { PerpMarketProxy } = systems();
-      const orderSide = genSide();
-      const { trader, market, marketId, collateral, collateralDepositAmount } = await depositMargin(bs, genTrader(bs));
-      const order = await genOrder(bs, market, collateral, collateralDepositAmount, {
-        desiredLeverage: 10,
-        desiredSide: orderSide,
+    // it('full liquidation should update reported debt', async () => {
+    //   const { PerpMarketProxy, Core, SpotMarket } = systems();
+    //   const orderSide = 1; //genSide();
+    //   const { trader, market, marketId, collateral, collateralDepositAmount, marginUsdDepositAmount } =
+    //     await depositMargin(
+    //       bs,
+    //       genTrader(bs, { desiredMarginUsdDepositAmount: 1000 }) // Small amount to guarantee full liquidation
+    //     );
+    //   const reportedDebtAfterDeposit = await PerpMarketProxy.reportedDebt(marketId);
+    //   const totalDebtAfterDeposit = await Core.getMarketTotalDebt(marketId);
+
+    //   const order = await genOrder(bs, market, collateral, collateralDepositAmount, {
+    //     desiredLeverage: 3,
+    //     desiredSide: orderSide,
+    //     desiredKeeperFeeBufferUsd: 0,
+    //   });
+    //   await commitAndSettle(bs, marketId, trader, order);
+    //   const reportedDebtAfterOrder = await PerpMarketProxy.reportedDebt(marketId);
+    //   const totalDebtAfterOrder = await Core.getMarketTotalDebt(marketId);
+    //   const pnlStraightAfterOpen = (await PerpMarketProxy.getPositionDigest(trader.accountId, marketId)).pnl;
+
+    //   const { returnAmount: spotQuoteSellAfterOrder } = await SpotMarket.quoteSellExactIn(
+    //     collateral.synthMarketId(),
+    //     collateralDepositAmount
+    //   );
+
+    //   const newMarketOraclePrice = wei(order.oraclePrice)
+    //     .mul(orderSide === 1 ? 0.67 : 1.34)
+    //     .toBN();
+    //   console.log('setting price');
+    //   await market.aggregator().mockSetCurrentPrice(newMarketOraclePrice);
+    //   console.log('price set');
+    //   const reportedDebtAfterPriceChange = await PerpMarketProxy.reportedDebt(marketId);
+    //   console.log('reportedDebtAfterPriceChange');
+    //   const totalDebtAfterPriceChange = await Core.getMarketTotalDebt(marketId);
+    //   console.log('totalDebtAfterPriceChange');
+
+    //   const { receipt: flagReceipt } = await withExplicitEvmMine(
+    //     () => PerpMarketProxy.connect(keeper()).flagPosition(trader.accountId, marketId),
+    //     provider()
+    //   );
+    //   console.log('flag done');
+
+    //   const reportedDebtAfterFlagging = await PerpMarketProxy.reportedDebt(marketId);
+    //   const totalDebtAfterFlagging = await Core.getMarketTotalDebt(marketId);
+
+    //   const { receipt: liqReceipt } = await withExplicitEvmMine(
+    //     () => PerpMarketProxy.connect(keeper()).liquidatePosition(trader.accountId, marketId),
+    //     provider()
+    //   );
+    //   const reportedDebtAfter = await PerpMarketProxy.reportedDebt(marketId);
+    //   const totalDebtAfterLiq = await Core.getMarketTotalDebt(marketId);
+    //   const positionFlagEvent = findEventSafe(flagReceipt, 'PositionFlaggedLiquidation', PerpMarketProxy);
+    //   const positionLiquidatedEvent = findEventSafe(liqReceipt, 'PositionLiquidated', PerpMarketProxy);
+
+    //   console.log('-'.repeat(50));
+    //   logNumber('remainingSize', positionLiquidatedEvent.args.remainingSize);
+    //   logNumber('liquidationKeeperFee', positionLiquidatedEvent.args.liquidationKeeperFee);
+    //   logNumber('flagKeeperReward', positionFlagEvent.args.flagKeeperReward);
+    //   logNumber('remainingSize * price', wei(newMarketOraclePrice).mul(positionLiquidatedEvent.args.remainingSize));
+    //   logNumber('order.sizeDelta', order.sizeDelta);
+    //   logNumber('order.sizeDelta * fill price', wei(order.sizeDelta).mul(order.fillPrice));
+    //   logNumber('collateralDepositAmount', collateralDepositAmount);
+    //   logNumber('marginUsdDepositAmount', marginUsdDepositAmount);
+    //   logNumber('order.orderFee', order.orderFee);
+    //   logNumber('order.keeperFee', order.keeperFee);
+    //   console.log('-'.repeat(50));
+    //   logNumber('reportedDebtAfterDeposit', reportedDebtAfterDeposit);
+    //   logNumber('totalDebtAfterDeposit', totalDebtAfterDeposit);
+    //   console.log('-'.repeat(50));
+    //   logNumber('reportedDebtAfterOrder', reportedDebtAfterOrder);
+    //   logNumber('totalDebtAfterOrder', totalDebtAfterOrder);
+    //   logNumber('pnlStraightAfterOpen', pnlStraightAfterOpen);
+    //   logNumber('spotQuoteSellAfterOrder', spotQuoteSellAfterOrder);
+    //   // console.log('marketDigestAfterOrder', marketDigestAfterOrder);
+
+    //   console.log('-'.repeat(50));
+    //   logNumber('reportedDebtAfterPriceChange', reportedDebtAfterPriceChange);
+    //   logNumber('totalDebtAfterPriceChange', totalDebtAfterPriceChange);
+    //   console.log('-'.repeat(50));
+
+    //   logNumber('reportedDebtAfterFlagging', reportedDebtAfterFlagging);
+    //   logNumber('totalDebtAfterFlagging', totalDebtAfterFlagging);
+    //   console.log('-'.repeat(50));
+
+    //   logNumber('reportedDebtAfterLiquidation', reportedDebtAfter);
+    //   logNumber('totalDebtAfterLiquidation', totalDebtAfterLiq);
+
+    //   assertBn.equal(
+    //     wei(totalDebtAfterPriceChange)
+    //       .add(positionLiquidatedEvent.args.liquidationKeeperFee)
+    //       .add(positionFlagEvent.args.flagKeeperReward)
+    //       .toBN(),
+    //     totalDebtAfterLiq
+    //   );
+    // });
+
+    // loop 20 times
+    for (let i = 0; i < 1; i++) {
+      it.only('liquidation should update reported debt/ total debt', async () => {
+        const { PerpMarketProxy, Core, SpotMarket } = systems();
+        const orderSide = 1; //genSide();
+        const market = markets()[1]; // ETHPERP.
+        const marketId = market.marketId();
+
+        await setMarketConfigurationById(bs, marketId, {
+          // makerFee: bn(0.000000001),
+          // takerFee: bn(0),
+          maxFundingVelocity: bn(0),
+          // skewScale: bn(1_000_000_000), // An extremely large skewScale to minimise price impact.
+        });
+
+        const { trader, collateral, collateralDepositAmount, marginUsdDepositAmount } = await depositMargin(
+          bs,
+          genTrader(bs, {
+            desiredMarket: market,
+            desiredCollateral: getSusdCollateral(collaterals()),
+            desiredMarginUsdDepositAmount: 100000,
+          })
+        );
+        const reportedDebtAfterDeposit = await PerpMarketProxy.reportedDebt(marketId);
+        const { debtCorrection: debtCorrectionAfterDeposit } = await PerpMarketProxy.getMarketDigest(marketId);
+        const totalDebtAfterDeposit = await Core.getMarketTotalDebt(marketId);
+
+        const order = await genOrder(bs, market, collateral, collateralDepositAmount, {
+          desiredLeverage: 1,
+          desiredSide: orderSide,
+          desiredKeeperFeeBufferUsd: 0,
+        });
+        await commitAndSettle(bs, marketId, trader, order);
+        const reportedDebtAfterOrder = await PerpMarketProxy.reportedDebt(marketId);
+        const totalDebtAfterOrder = await Core.getMarketTotalDebt(marketId);
+        const { debtCorrection: debtCorrectionAfterOrder } = await PerpMarketProxy.getMarketDigest(marketId);
+
+        const pnlStraightAfterOpen = (await PerpMarketProxy.getPositionDigest(trader.accountId, marketId)).pnl;
+
+        const newMarketOraclePrice = wei(order.oraclePrice)
+          .mul(orderSide === 1 ? 0.00001 : 1.34)
+          .toBN();
+
+        await market.aggregator().mockSetCurrentPrice(newMarketOraclePrice);
+
+        const reportedDebtAfterPriceChange = await PerpMarketProxy.reportedDebt(marketId);
+
+        const totalDebtAfterPriceChange = await Core.getMarketTotalDebt(marketId);
+        const { debtCorrection: debtCorrectionAfterPriceChange } = await PerpMarketProxy.getMarketDigest(marketId);
+
+        const { receipt: flagReceipt } = await withExplicitEvmMine(
+          () => PerpMarketProxy.connect(keeper()).flagPosition(trader.accountId, marketId),
+          provider()
+        );
+
+        const reportedDebtAfterFlagging = await PerpMarketProxy.reportedDebt(marketId);
+        const totalDebtAfterFlagging = await Core.getMarketTotalDebt(marketId);
+        const { debtCorrection: debtCorrectionAfterFlagging } = await PerpMarketProxy.getMarketDigest(marketId);
+
+        const { receipt: liqReceipt } = await withExplicitEvmMine(
+          () => PerpMarketProxy.connect(keeper()).liquidatePosition(trader.accountId, marketId),
+          provider()
+        );
+        const reportedDebtAfterLiq = await PerpMarketProxy.reportedDebt(marketId);
+        const totalDebtAfterLiq = await Core.getMarketTotalDebt(marketId);
+        const { debtCorrection: debtCorrectionAfterLiq } = await PerpMarketProxy.getMarketDigest(marketId);
+
+        const positionFlagEvent = findEventSafe(flagReceipt, 'PositionFlaggedLiquidation', PerpMarketProxy);
+        const positionLiquidatedEvent = findEventSafe(liqReceipt, 'PositionLiquidated', PerpMarketProxy);
+
+        console.log('-'.repeat(50));
+        logNumber('orderFillPrice', order.fillPrice);
+        logNumber('remainingSize', positionLiquidatedEvent.args.remainingSize);
+        logNumber('liquidationKeeperFee', positionLiquidatedEvent.args.liquidationKeeperFee);
+        logNumber('flagKeeperReward', positionFlagEvent.args.flagKeeperReward);
+        logNumber('newMarketOraclePrice', newMarketOraclePrice);
+        logNumber('remainingSize * price', wei(newMarketOraclePrice).mul(positionLiquidatedEvent.args.remainingSize));
+        logNumber('order.sizeDelta', order.sizeDelta);
+        logNumber('order.sizeDelta * fill price', wei(order.sizeDelta).mul(order.fillPrice));
+        logNumber('collateralDepositAmount', collateralDepositAmount);
+        logNumber('marginUsdDepositAmount', marginUsdDepositAmount);
+        logNumber('order.orderFee', order.orderFee);
+        logNumber('order.keeperFee', order.keeperFee);
+        console.log('-'.repeat(50));
+        logNumber('reportedDebtAfterDeposit', reportedDebtAfterDeposit);
+        logNumber('totalDebtAfterDeposit', totalDebtAfterDeposit);
+        logNumber('debtCorrectionAfterDeposit', debtCorrectionAfterDeposit);
+        console.log('-'.repeat(50));
+        logNumber('reportedDebtAfterOrder', reportedDebtAfterOrder);
+        logNumber('totalDebtAfterOrder', totalDebtAfterOrder);
+        logNumber('pnlStraightAfterOpen', pnlStraightAfterOpen);
+        logNumber('debtCorrectionAfterOpen', debtCorrectionAfterOrder);
+
+        // console.log('marketDigestAfterOrder', marketDigestAfterOrder);
+
+        console.log('-'.repeat(50));
+        logNumber('reportedDebtAfterPriceChange', reportedDebtAfterPriceChange);
+        logNumber('totalDebtAfterPriceChange', totalDebtAfterPriceChange);
+        logNumber('debtCorrectionAfterPriceChange', debtCorrectionAfterPriceChange);
+
+        console.log('-'.repeat(50));
+
+        logNumber('reportedDebtAfterFlagging', reportedDebtAfterFlagging);
+        logNumber('totalDebtAfterFlagging', totalDebtAfterFlagging);
+        logNumber('debtCorrectionAfterFlagging', debtCorrectionAfterFlagging);
+
+        console.log('-'.repeat(50));
+
+        logNumber('reportedDebtAfterLiquidation', reportedDebtAfterLiq);
+        logNumber('totalDebtAfterLiquidation', totalDebtAfterLiq);
+        logNumber('debtCorrectionAfterLiq', debtCorrectionAfterLiq);
+
+        assertBn.equal(
+          wei(totalDebtAfterPriceChange)
+            .add(positionLiquidatedEvent.args.liquidationKeeperFee)
+            .add(positionFlagEvent.args.flagKeeperReward)
+            .toBN(),
+          totalDebtAfterLiq.sub(reportedDebtAfterLiq)
+        );
       });
-      await commitAndSettle(bs, marketId, trader, order);
-
-      const newMarketOraclePrice = wei(order.oraclePrice)
-        .mul(orderSide === 1 ? 0.9 : 1.1)
-        .toBN();
-      await market.aggregator().mockSetCurrentPrice(newMarketOraclePrice);
-
-      const marketBefore = await PerpMarketProxy.getMarketDigest(marketId);
-
-      await PerpMarketProxy.connect(keeper()).flagPosition(trader.accountId, marketId);
-
-      await withExplicitEvmMine(
-        () => PerpMarketProxy.connect(keeper()).liquidatePosition(trader.accountId, marketId),
-        provider()
-      );
-      const marketAfter = await PerpMarketProxy.getMarketDigest(marketId);
-
-      assertBn.lt(
-        marketBefore.debtCorrection,
-        marketAfter.debtCorrection.sub(order.sizeDelta.abs().add(newMarketOraclePrice))
-      );
-    });
-
+    }
     it('should update lastLiq{time,utilization}', async () => {
       const { PerpMarketProxy } = systems();
 
