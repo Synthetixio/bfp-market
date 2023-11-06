@@ -69,24 +69,26 @@ export const calcOrderFees = async (
   // Get the current ETH price.
   const { answer: ethPrice } = await ethOracleNode().agg.latestRoundData();
   // Grab market configuration to infer price.
-  const { keeperSettlementGasUnits, keeperProfitMarginPercent, minKeeperFeeUsd, maxKeeperFeeUsd } =
-    await PerpMarketProxy.getMarketConfiguration();
+  const {
+    maxKeeperFeeUsd,
+    keeperSettlementGasUnits,
+    keeperSettlementProfitMarginPercent,
+    keeperSettlementProfitMarginUsd,
+  } = await PerpMarketProxy.getMarketConfiguration();
 
-  const calcKeeperOrderSettlementFee = (blockBaseFeePerGas: BigNumber) => {
-    // Perform calc bounding by min/max to prevent going over/under.
-    const baseKeeperFeeUsd = wei(keeperSettlementGasUnits.mul(blockBaseFeePerGas)).mul(1e9).mul(ethPrice);
+  function calcKeeperOrderSettlementFee(blockBaseFeePerGas: BigNumber) {
+    const settleExecutionCostInUSD = calculateTransactionCostInUSD(
+      blockBaseFeePerGas,
+      keeperSettlementGasUnits,
+      ethPrice
+    );
 
-    // Base keeperFee + profit margin and asmall user specified buffer.
-    const baseKeeperFeePlusProfit = baseKeeperFeeUsd.mul(wei(1).add(keeperProfitMarginPercent).add(keeperFeeBufferUsd));
-
-    // Ensure keeper fee doesn't exceed min/max bounds.
-    const boundedKeeperFeeUsd = Wei.min(
-      Wei.max(wei(minKeeperFeeUsd), baseKeeperFeePlusProfit),
-      wei(maxKeeperFeeUsd)
-    ).toBN();
-
-    return boundedKeeperFeeUsd;
-  };
+    const settleExecutionCostInUSDWithProfit = Wei.max(
+      wei(settleExecutionCostInUSD).mul(wei(1).add(keeperSettlementProfitMarginPercent)),
+      wei(settleExecutionCostInUSD).add(wei(keeperSettlementProfitMarginUsd))
+    );
+    return Wei.min(settleExecutionCostInUSDWithProfit, wei(maxKeeperFeeUsd)).add(keeperFeeBufferUsd);
+  }
 
   return { notional, orderFee, calcKeeperOrderSettlementFee };
 };

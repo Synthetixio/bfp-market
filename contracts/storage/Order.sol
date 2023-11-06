@@ -86,32 +86,20 @@ library Order {
 
     /**
      * @dev Returns the order keeper fee; paid to keepers for order executions and liquidations (in USD).
-     *
-     * This order keeper fee is calculated as follows:
-     *
-     * baseKeeperFeeUsd        = keeperSettlementGasUnits * block.basefee * ethOraclePrice
-     * boundedBaseKeeperFeeUsd = max(min(minKeeperFeeUsd, baseKeeperFee * (1 + profitMarginPercent) + keeperFeeBufferUsd), maxKeeperFeeUsd)
-     *
-     * keeperSettlementGasUnits - is a configurable number of gas units to execute a settlement
-     * ethOraclePrice           - on-chain oracle price (commitment), pyth price (settlement)
-     * keeperFeeBufferUsd       - a user configurable amount in usd to add on top of the base keeper fee
-     * min/maxKeeperFeeUsd      - a min/max bound to ensure fee cannot be below min or above max
-     *
+
      * See IOrderModule.getOrderFees for more details.
      */
     function getSettlementKeeperFee(uint256 keeperFeeBufferUsd) internal view returns (uint256) {
         PerpMarketConfiguration.GlobalData storage globalConfig = PerpMarketConfiguration.load();
 
         uint256 ethPrice = globalConfig.oracleManager.process(globalConfig.ethOracleNodeId).price.toUint();
-        uint256 baseKeeperFeeUsd = ethPrice.mulDecimal((globalConfig.keeperSettlementGasUnits * block.basefee * 1e9));
-        uint256 baseKeeperFeePlusProfitUsd = baseKeeperFeeUsd.mulDecimal(
-            DecimalMath.UNIT + globalConfig.keeperProfitMarginPercent
-        ) + keeperFeeBufferUsd;
-        uint256 boundedKeeperFeeUsd = MathUtil.min(
-            MathUtil.max(globalConfig.minKeeperFeeUsd, baseKeeperFeePlusProfitUsd),
-            globalConfig.maxKeeperFeeUsd
+
+        uint256 executionCostInUSD = globalConfig.keeperSettlementGasUnits * ethPrice * block.basefee;
+        uint256 executeFeeInUSDWithProfits = MathUtil.max(
+            executionCostInUSD * (DecimalMath.UNIT + globalConfig.keeperSettlementProfitMarginPercent),
+            executionCostInUSD + globalConfig.keeperSettlementProfitMarginUsd
         );
-        return boundedKeeperFeeUsd;
+        return MathUtil.min(executeFeeInUSDWithProfits, globalConfig.maxKeeperFeeUsd) + keeperFeeBufferUsd;
     }
 
     // --- Member (mutative) --- //
