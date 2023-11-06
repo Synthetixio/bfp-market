@@ -16,8 +16,9 @@ interface IMarketConfigurationModule {
         uint64 pythPublishTimeMax;
         uint128 minOrderAge;
         uint128 maxOrderAge;
-        uint256 minKeeperFeeUsd;
         uint256 maxKeeperFeeUsd;
+        uint128 keeperSettlementProfitMarginPercent;
+        uint128 keeperSettlementProfitMarginUsd;
         uint128 keeperProfitMarginPercent;
         uint128 keeperProfitMarginUsd;
         uint128 keeperSettlementGasUnits;
