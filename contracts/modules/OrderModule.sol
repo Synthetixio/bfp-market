@@ -8,6 +8,7 @@ import {ErrorUtil} from "../utils/ErrorUtil.sol";
 import {IOrderModule} from "../interfaces/IOrderModule.sol";
 import {Margin} from "../storage/Margin.sol";
 import {MathUtil} from "../utils/MathUtil.sol";
+import {PythUtil} from "../utils/PythUtil.sol";
 import {Order} from "../storage/Order.sol";
 import {PerpMarket} from "../storage/PerpMarket.sol";
 import {PerpMarketConfiguration} from "../storage/PerpMarketConfiguration.sol";
@@ -31,7 +32,6 @@ contract OrderModule is IOrderModule {
 
     struct Runtime_settleOrder {
         uint256 pythPrice;
-        uint256 publishTime;
         int256 accruedFunding;
         int256 pnl;
         uint256 fillPrice;
@@ -88,31 +88,13 @@ contract OrderModule is IOrderModule {
         PerpMarket.Data storage market,
         PerpMarketConfiguration.GlobalData storage globalConfig,
         uint256 commitmentTime,
-        uint256 publishTime,
         Position.TradeParams memory params
     ) private view {
-        // The publishTime is _before_ the commitmentTime
-        if (publishTime < commitmentTime) {
-            revert ErrorUtil.StalePrice();
-        }
-
         if (isOrderStale(commitmentTime, globalConfig.maxOrderAge)) {
             revert ErrorUtil.StaleOrder();
         }
         if (!isOrderReady(commitmentTime, globalConfig.minOrderAge)) {
             revert ErrorUtil.OrderNotReady();
-        }
-
-        // Time delta must be within pythPublishTimeMin and pythPublishTimeMax.
-        //
-        // If `minOrderAge` is 12s then publishTime must be between 8 and 12 (inclusive). When inferring
-        // this parameter off-chain and prior to configuration, it must look at `minOrderAge` to a relative value.
-        uint256 publishCommitmentTimeDelta = publishTime - commitmentTime;
-        if (
-            publishCommitmentTimeDelta < globalConfig.pythPublishTimeMin ||
-            publishCommitmentTimeDelta > globalConfig.pythPublishTimeMax
-        ) {
-            revert ErrorUtil.InvalidPrice();
         }
 
         uint256 onchainPrice = market.getOraclePrice();
@@ -220,7 +202,7 @@ contract OrderModule is IOrderModule {
     /**
      * @inheritdoc IOrderModule
      */
-    function settleOrder(uint128 accountId, uint128 marketId, bytes[] calldata priceUpdateData) external payable {
+    function settleOrder(uint128 accountId, uint128 marketId, bytes calldata priceUpdateData) external payable {
         PerpMarket.Data storage market = PerpMarket.exists(marketId);
 
         Order.Data storage order = market.orders[accountId];
@@ -234,13 +216,7 @@ contract OrderModule is IOrderModule {
         PerpMarketConfiguration.GlobalData storage globalConfig = PerpMarketConfiguration.load();
         PerpMarketConfiguration.Data storage marketConfig = PerpMarketConfiguration.load(marketId);
 
-        // TODO: This can be optimized as not all settlements may need the Pyth priceUpdateData.
-        //
-        // We can create a separate external updatePythPrice function, including adding an external `pythPrice`
-        // such that keepers can conditionally update prices only if necessary.
-        PerpMarket.updatePythPrice(priceUpdateData);
-
-        (runtime.pythPrice, runtime.publishTime) = market.getPythPrice(order.commitmentTime);
+        runtime.pythPrice = PythUtil.parsePythPrice(globalConfig, marketConfig, order.commitmentTime, priceUpdateData);
         runtime.fillPrice = Order.getFillPrice(market.skew, marketConfig.skewScale, order.sizeDelta, runtime.pythPrice);
         runtime.params = Position.TradeParams(
             order.sizeDelta,
@@ -252,7 +228,7 @@ contract OrderModule is IOrderModule {
             order.keeperFeeBufferUsd
         );
 
-        validateOrderPriceReadiness(market, globalConfig, order.commitmentTime, runtime.publishTime, runtime.params);
+        validateOrderPriceReadiness(market, globalConfig, order.commitmentTime, runtime.params);
 
         recomputeFunding(market, runtime.pythPrice);
 
@@ -311,7 +287,7 @@ contract OrderModule is IOrderModule {
         delete market.orders[accountId];
     }
 
-    function cancelOrder(uint128 accountId, uint128 marketId, bytes[] calldata priceUpdateData) external payable {
+    function cancelOrder(uint128 accountId, uint128 marketId, bytes calldata priceUpdateData) external payable {
         PerpMarket.Data storage market = PerpMarket.exists(marketId);
         Account.Data storage account = Account.exists(accountId);
 
@@ -337,14 +313,13 @@ contract OrderModule is IOrderModule {
             }
         } else {
             // Order is ready and not stale, check if price tolerance is exceeded
-            // TODO Remove ones pyth is updated, and use PythUtil.parsePythPrice
 
-            PerpMarket.updatePythPrice(priceUpdateData);
-            (uint256 pythPrice, uint256 publishTime) = market.getPythPrice(order.commitmentTime);
-            // The publishTime is _before_ the commitmentTime
-            if (publishTime < order.commitmentTime) {
-                revert ErrorUtil.StalePrice();
-            }
+            uint256 pythPrice = PythUtil.parsePythPrice(
+                globalConfig,
+                marketConfig,
+                order.commitmentTime,
+                priceUpdateData
+            );
             uint256 fillPrice = Order.getFillPrice(market.skew, marketConfig.skewScale, order.sizeDelta, pythPrice);
             uint256 onchainPrice = market.getOraclePrice();
 
