@@ -25,9 +25,10 @@ describe('MarketConfigurationModule', async () => {
       assert.equal(config.pythPublishTimeMax, global.pythPublishTimeMax);
       assert.equal(config.minOrderAge, global.minOrderAge);
       assert.equal(config.maxOrderAge, global.maxOrderAge);
-      assertBn.equal(config.minKeeperFeeUsd, global.minKeeperFeeUsd);
       assertBn.equal(config.maxKeeperFeeUsd, global.maxKeeperFeeUsd);
       assertBn.equal(config.keeperProfitMarginPercent, global.keeperProfitMarginPercent);
+      assertBn.equal(config.keeperSettlementProfitMarginPercent, global.keeperSettlementProfitMarginPercent);
+      assertBn.equal(config.keeperSettlementProfitMarginUsd, global.keeperSettlementProfitMarginUsd);
       assert.equal(config.keeperSettlementGasUnits, global.keeperSettlementGasUnits);
       assert.equal(config.keeperLiquidationGasUnits, global.keeperLiquidationGasUnits);
       assertBn.equal(config.keeperLiquidationFeeUsd, global.keeperLiquidationFeeUsd);

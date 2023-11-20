@@ -76,10 +76,7 @@ interface IOrderModule is IBasePerpMarket {
      * This incorporates the scenario where a if a trade flips the skew, the proportion that reduces the skew
      * is charged a makerFee but the flipped side that expands skew is charged a takerFee.
      *
-     * For the keeper fee, calculation is as follows `orderSettlementGasUnits * block.basefee * ETH/USD + bufferUsd.
-     * Which, can roughly be related to (units * baseFee) / 10e9 * oraclePrice.
-     *
-     * The keeper fee is then bounded between a configurable min/max and a buffer is then provided.
+     * For the keeper fee, calculation is based on the previous block's basefee with profit margins and max payout applied
      */
     function getOrderFees(
         uint128 marketId,

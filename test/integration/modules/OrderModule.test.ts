@@ -1355,7 +1355,7 @@ describe('OrderModule', () => {
 
         // Cap the max keeperFee to $50 USD
         const maxKeeperFeeUsd = bn(50);
-        await setMarketConfiguration(bs, { maxKeeperFeeUsd, minKeeperFeeUsd: bn(10) });
+        await setMarketConfiguration(bs, { maxKeeperFeeUsd });
 
         const { trader, marketId, market, collateral, collateralDepositAmount } = await depositMargin(
           bs,

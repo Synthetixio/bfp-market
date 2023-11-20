@@ -20,8 +20,9 @@ contract MarketConfigurationModule is IMarketConfigurationModule {
         config.pythPublishTimeMax = data.pythPublishTimeMax;
         config.minOrderAge = data.minOrderAge;
         config.maxOrderAge = data.maxOrderAge;
-        config.minKeeperFeeUsd = data.minKeeperFeeUsd;
         config.maxKeeperFeeUsd = data.maxKeeperFeeUsd;
+        config.keeperSettlementProfitMarginPercent = data.keeperSettlementProfitMarginPercent;
+        config.keeperSettlementProfitMarginUsd = data.keeperSettlementProfitMarginUsd;
         config.keeperProfitMarginPercent = data.keeperProfitMarginPercent;
         config.keeperProfitMarginUsd = data.keeperProfitMarginUsd;
         config.keeperSettlementGasUnits = data.keeperSettlementGasUnits;

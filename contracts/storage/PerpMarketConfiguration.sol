@@ -49,13 +49,15 @@ library PerpMarketConfiguration {
         uint128 minOrderAge;
         // Maximum order age (in seconds) before the order becomes stale.
         uint128 maxOrderAge;
-        // The min amount in USD a keeper should receive on settlements (currently not used for liquidations).
-        uint256 minKeeperFeeUsd;
         // The maximum amount in USD a keeper should receive on settlements/liquidations.
         uint256 maxKeeperFeeUsd;
+        // This is used to ensure we have incentives to settle small order
+        uint128 keeperSettlementProfitMarginUsd;
+        // A multiplier on the base keeper fee derived as a profit margin on liquidations.
+        uint128 keeperSettlementProfitMarginPercent;
         // This is used to ensure we have incentives to liquidate small positions
         uint128 keeperProfitMarginUsd;
-        // A multiplier on the base keeper fee derived as a profit margin on settlements/liquidations.
+        // A multiplier on the base keeper fee derived as a profit margin on liquidations.
         uint128 keeperProfitMarginPercent;
         // Number of gas units required to perform an order settlement by a keeper.
         uint128 keeperSettlementGasUnits;
