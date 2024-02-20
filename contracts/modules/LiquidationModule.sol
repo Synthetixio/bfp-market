@@ -419,15 +419,17 @@ contract LiquidationModule is ILiquidationModule {
      */
     function getLiquidationMarginUsd(
         uint128 accountId,
-        uint128 marketId
+        uint128 marketId,
+        int128 sizeDelta
     ) external view returns (uint256 im, uint256 mm) {
         PerpMarket.Data storage market = PerpMarket.exists(marketId);
+        Account.exists(accountId);
         PerpMarketConfiguration.Data storage marketConfig = PerpMarketConfiguration.load(marketId);
 
         uint256 oraclePrice = market.getOraclePrice();
 
         (im, mm, ) = Position.getLiquidationMarginUsd(
-            market.positions[accountId].size,
+            market.positions[accountId].size + sizeDelta,
             oraclePrice,
             Margin.getMarginUsd(accountId, market, oraclePrice).collateralUsd,
             marketConfig

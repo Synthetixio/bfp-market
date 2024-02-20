@@ -2263,4 +2263,187 @@ describe('LiquidationModule', () => {
       it('should revert when pd is below maxPd but liquidation happens in the same block');
     });
   });
+  describe('getLiquidationMarginUsd', () => {
+    it('should revert when invalid marketId', async () => {
+      const { PerpMarketProxy } = systems();
+      const invalidMarketId = 42069;
+
+      await assertRevert(
+        PerpMarketProxy.getLiquidationMarginUsd(0, invalidMarketId, 0),
+        `MarketNotFound("${invalidMarketId}")`,
+        PerpMarketProxy
+      );
+    });
+
+    it('should revert when invalid accountId', async () => {
+      const { PerpMarketProxy } = systems();
+      const { marketId } = await depositMargin(bs, genTrader(bs));
+      const invalidAccountId = 42069;
+      await assertRevert(
+        PerpMarketProxy.getLiquidationMarginUsd(invalidAccountId, marketId, 0),
+        `AccountNotFound("${invalidAccountId}")`,
+        PerpMarketProxy
+      );
+    });
+
+    it('should revert when invalid accountId', async () => {
+      const { PerpMarketProxy } = systems();
+      const { marketId } = await depositMargin(bs, genTrader(bs));
+      const invalidAccountId = 42069;
+      await assertRevert(
+        PerpMarketProxy.getLiquidationMarginUsd(invalidAccountId, marketId, 0),
+        `AccountNotFound("${invalidAccountId}")`,
+        PerpMarketProxy
+      );
+    });
+
+    it('should calculate IM and MM for existing position', async () => {
+      const { PerpMarketProxy } = systems();
+      const { market, collateral, collateralDepositAmount, marketId, trader, marginUsdDepositAmount } =
+        await depositMargin(bs, genTrader(bs));
+      const order = await genOrder(bs, market, collateral, collateralDepositAmount);
+      await commitAndSettle(bs, marketId, trader, order);
+
+      const baseFeePerGas = await setBaseFeePerGas(0, provider());
+
+      const { mm, im } = await PerpMarketProxy.getLiquidationMarginUsd(trader.accountId, marketId, 0);
+
+      // Data for calcs
+      const { maxLiquidatableCapacity } = await PerpMarketProxy.getRemainingLiquidatableSizeCapacity(marketId);
+      const { answer: ethPrice } = await bs.ethOracleNode().agg.latestRoundData();
+      const absSize = wei(order.sizeDelta).abs();
+      const notional = absSize.mul(order.oraclePrice);
+      const globalConfig = await PerpMarketProxy.getMarketConfiguration();
+      const marketConfig = await PerpMarketProxy.getMarketConfigurationById(marketId);
+
+      const flagReward = calcFlagReward(
+        ethPrice,
+        baseFeePerGas,
+        absSize,
+        wei(order.oraclePrice),
+        wei(marginUsdDepositAmount),
+        globalConfig,
+        marketConfig
+      );
+      const liqReward = calcLiquidationKeeperFee(
+        ethPrice,
+        baseFeePerGas,
+        absSize,
+        wei(maxLiquidatableCapacity),
+        globalConfig
+      );
+      const imr = absSize
+        .div(marketConfig.skewScale)
+        .mul(marketConfig.incrementalMarginScalar)
+        .add(marketConfig.minMarginRatio);
+      const mmr = imr.mul(marketConfig.maintenanceMarginScalar);
+
+      const expectedIm = notional.mul(imr).add(marketConfig.minMarginUsd);
+      const expectedMm = notional.mul(mmr).add(marketConfig.minMarginUsd).add(liqReward).add(flagReward);
+
+      assertBn.near(im, expectedIm.toBN(), bn(0.000001));
+      assertBn.near(mm, expectedMm.toBN(), bn(0.000001));
+    });
+
+    it('should calculate IM and MM for new position', async () => {
+      const { PerpMarketProxy } = systems();
+      const { market, collateralDepositAmount, marketId, trader, marginUsdDepositAmount } = await depositMargin(
+        bs,
+        genTrader(bs)
+      );
+
+      const { answer: marketPrice } = await market.aggregator().latestRoundData();
+      const desiredLeverage = genNumber(-5, 5);
+      const desiredSize = wei(collateralDepositAmount).div(marketPrice).mul(desiredLeverage).toBN();
+      const baseFeePerGas = await setBaseFeePerGas(0, provider());
+      const { mm, im } = await PerpMarketProxy.getLiquidationMarginUsd(trader.accountId, marketId, desiredSize);
+
+      // Data for calcs
+      const { maxLiquidatableCapacity } = await PerpMarketProxy.getRemainingLiquidatableSizeCapacity(marketId);
+      const { answer: ethPrice } = await bs.ethOracleNode().agg.latestRoundData();
+      const absSize = wei(desiredSize).abs();
+      const notional = absSize.mul(marketPrice);
+      const globalConfig = await PerpMarketProxy.getMarketConfiguration();
+      const marketConfig = await PerpMarketProxy.getMarketConfigurationById(marketId);
+
+      const flagReward = calcFlagReward(
+        ethPrice,
+        baseFeePerGas,
+        absSize,
+        wei(marketPrice),
+        wei(marginUsdDepositAmount),
+        globalConfig,
+        marketConfig
+      );
+      const liqReward = calcLiquidationKeeperFee(
+        ethPrice,
+        baseFeePerGas,
+        absSize,
+        wei(maxLiquidatableCapacity),
+        globalConfig
+      );
+      const imr = absSize
+        .div(marketConfig.skewScale)
+        .mul(marketConfig.incrementalMarginScalar)
+        .add(marketConfig.minMarginRatio);
+      const mmr = imr.mul(marketConfig.maintenanceMarginScalar);
+
+      const expectedIm = notional.mul(imr).add(marketConfig.minMarginUsd);
+      const expectedMm = notional.mul(mmr).add(marketConfig.minMarginUsd).add(liqReward).add(flagReward);
+
+      assertBn.near(im, expectedIm.toBN(), bn(0.000001));
+      assertBn.near(mm, expectedMm.toBN(), bn(0.000001));
+    });
+
+    it('should calculate IM and MM for modifying a position', async () => {
+      const { PerpMarketProxy } = systems();
+      const { market, collateral, collateralDepositAmount, marketId, trader, marginUsdDepositAmount } =
+        await depositMargin(bs, genTrader(bs));
+      const order = await genOrder(bs, market, collateral, collateralDepositAmount);
+      await commitAndSettle(bs, marketId, trader, order);
+
+      const desiredSizeDelta = bn(genNumber(-1, 1));
+      const baseFeePerGas = await setBaseFeePerGas(0, provider());
+      const { mm, im } = await PerpMarketProxy.getLiquidationMarginUsd(trader.accountId, marketId, desiredSizeDelta);
+
+      // Data for calcs
+      const { maxLiquidatableCapacity } = await PerpMarketProxy.getRemainingLiquidatableSizeCapacity(marketId);
+      const { answer: ethPrice } = await bs.ethOracleNode().agg.latestRoundData();
+      const { answer: marketPrice } = await market.aggregator().latestRoundData();
+
+      const size = order.sizeDelta.add(desiredSizeDelta);
+      const absSize = wei(size).abs();
+      const notional = absSize.mul(marketPrice);
+      const globalConfig = await PerpMarketProxy.getMarketConfiguration();
+      const marketConfig = await PerpMarketProxy.getMarketConfigurationById(marketId);
+
+      const flagReward = calcFlagReward(
+        ethPrice,
+        baseFeePerGas,
+        absSize,
+        wei(marketPrice),
+        wei(marginUsdDepositAmount),
+        globalConfig,
+        marketConfig
+      );
+      const liqReward = calcLiquidationKeeperFee(
+        ethPrice,
+        baseFeePerGas,
+        absSize,
+        wei(maxLiquidatableCapacity),
+        globalConfig
+      );
+      const imr = absSize
+        .div(marketConfig.skewScale)
+        .mul(marketConfig.incrementalMarginScalar)
+        .add(marketConfig.minMarginRatio);
+      const mmr = imr.mul(marketConfig.maintenanceMarginScalar);
+
+      const expectedIm = notional.mul(imr).add(marketConfig.minMarginUsd);
+      const expectedMm = notional.mul(mmr).add(marketConfig.minMarginUsd).add(liqReward).add(flagReward);
+
+      assertBn.near(im, expectedIm.toBN(), bn(0.000001));
+      assertBn.near(mm, expectedMm.toBN(), bn(0.000001));
+    });
+  });
 });

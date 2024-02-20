@@ -1062,7 +1062,7 @@ describe('OrderModule', () => {
         await commitAndSettle(bs, marketId, trader, order);
 
         // Ensure the we are > IM to start off fresh.
-        const { im } = await PerpMarketProxy.getLiquidationMarginUsd(trader.accountId, marketId);
+        const { im } = await PerpMarketProxy.getLiquidationMarginUsd(trader.accountId, marketId, bn(0));
         const d1 = await PerpMarketProxy.getAccountDigest(trader.accountId, marketId);
         assertBn.gt(d1.position.remainingMarginUsd, im);
 
@@ -1078,7 +1078,7 @@ describe('OrderModule', () => {
 
         // Verify that the position margin < IM.
         const d2 = await PerpMarketProxy.getAccountDigest(trader.accountId, marketId);
-        const { im: im2 } = await PerpMarketProxy.getLiquidationMarginUsd(trader.accountId, marketId);
+        const { im: im2 } = await PerpMarketProxy.getLiquidationMarginUsd(trader.accountId, marketId, bn(0));
         assertBn.lt(d2.position.remainingMarginUsd, im2);
 
         switch (variant) {
