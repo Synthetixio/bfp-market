@@ -39,6 +39,7 @@ import {
   SECONDS_ONE_DAY,
   setMarketConfigurationById,
   payDebt,
+  getFastForwardTimestamp,
 } from '../../helpers';
 import { calcDiscountedCollateralPrice, calcPnl } from '../../calculations';
 import { assertEvents } from '../../assert';
@@ -1123,7 +1124,7 @@ describe('MarginModule', async () => {
         await setMarketConfigurationById(bs, marketId, { maxMarketSize: 0 });
         const { maxMarketSize } = await PerpMarketProxy.getMarketConfigurationById(marketId);
         assertBn.equal(maxMarketSize, bn(0));
-        // We should be able to  withdraw
+        // We should be able to withdraw
         const { receipt: withdrawReceipt } = await withExplicitEvmMine(
           () => PerpMarketProxy.connect(trader.signer).withdrawAllCollateral(trader.accountId, marketId),
           provider()
@@ -1132,13 +1133,31 @@ describe('MarginModule', async () => {
         await assertEvent(withdrawReceipt, 'MarginWithdraw', PerpMarketProxy);
       });
 
-      it('should cancel order when withdrawing all if pending order exists and expired');
+      it('should revert withdrawingAll if pending order exists and expired', async () => {
+        const { PerpMarketProxy } = systems();
+        const { collateral, market, marketId, collateralDepositAmount, trader } = await depositMargin(
+          bs,
+          genTrader(bs)
+        );
+        const order = await genOrder(bs, market, collateral, collateralDepositAmount);
+
+        await commitOrder(bs, marketId, trader, order);
+        // Make the order expired
+        const { expireTime } = await getFastForwardTimestamp(bs, marketId, trader);
+        await fastForwardTo(expireTime + 10, provider());
+
+        await assertRevert(
+          PerpMarketProxy.connect(trader.signer).withdrawAllCollateral(trader.accountId, marketId),
+          'OrderFound()',
+          PerpMarketProxy
+        );
+      });
 
       it('should recompute funding', async () => {
         const { PerpMarketProxy } = systems();
         const { trader, market } = await depositMargin(bs, genTrader(bs));
 
-        // Perform the deposit.
+        // Execute withdrawAllCollateral.
         const { receipt } = await withExplicitEvmMine(
           () => PerpMarketProxy.connect(trader.signer).withdrawAllCollateral(trader.accountId, market.marketId()),
           provider()
