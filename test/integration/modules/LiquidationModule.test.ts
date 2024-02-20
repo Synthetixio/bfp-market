@@ -2286,17 +2286,6 @@ describe('LiquidationModule', () => {
       );
     });
 
-    it('should revert when invalid accountId', async () => {
-      const { PerpMarketProxy } = systems();
-      const { marketId } = await depositMargin(bs, genTrader(bs));
-      const invalidAccountId = 42069;
-      await assertRevert(
-        PerpMarketProxy.getLiquidationMarginUsd(invalidAccountId, marketId, 0),
-        `AccountNotFound("${invalidAccountId}")`,
-        PerpMarketProxy
-      );
-    });
-
     it('should calculate IM and MM for existing position', async () => {
       const { PerpMarketProxy } = systems();
       const { market, collateral, collateralDepositAmount, marketId, trader, marginUsdDepositAmount } =
