@@ -6,16 +6,7 @@ import assert from 'assert';
 import { shuffle } from 'lodash';
 import { assertEvents } from '../../assert';
 import { bootstrap } from '../../bootstrap';
-import {
-  bn,
-  genBootstrap,
-  genNumber,
-  genOneOf,
-  genOrder,
-  genSide,
-  genTrader,
-  toRoundRobinGenerators,
-} from '../../generators';
+import { bn, genBootstrap, genOneOf, genOrder, genSide, genTrader, toRoundRobinGenerators } from '../../generators';
 import {
   depositMargin,
   findEventSafe,
@@ -123,38 +114,6 @@ describe('OrderModule Cancelations', () => {
 
     it('should revert when price update from pyth is invalid');
 
-    it('should revert if stale order is canceled by non owner', async () => {
-      const { PerpMarketProxy } = systems();
-      const tradersGenerator = toRoundRobinGenerators(shuffle(traders()));
-
-      const { trader, marketId, market, collateral, collateralDepositAmount } = await depositMargin(
-        bs,
-        genTrader(bs, { desiredTrader: tradersGenerator.next().value })
-      );
-      const order = await genOrder(bs, market, collateral, collateralDepositAmount);
-
-      await PerpMarketProxy.connect(trader.signer).commitOrder(
-        trader.accountId,
-        marketId,
-        order.sizeDelta,
-        order.limitPrice,
-        order.keeperFeeBufferUsd,
-        order.hooks
-      );
-      const { publishTime, expireTime } = await getFastForwardTimestamp(bs, marketId, trader);
-      await fastForwardTo(genNumber(expireTime, expireTime * 2), provider());
-      const { updateData } = await getPythPriceDataByMarketId(bs, marketId, publishTime);
-
-      await assertRevert(
-        PerpMarketProxy.connect(tradersGenerator.next().value.signer).cancelOrder(
-          trader.accountId,
-          marketId,
-          updateData
-        ),
-        `OrderStale()`
-      );
-    });
-
     it('should revert if price tolerance not exceeded', async () => {
       const { PerpMarketProxy } = systems();
 
@@ -179,7 +138,7 @@ describe('OrderModule Cancelations', () => {
       );
     });
 
-    it('should cancel order if order is stale and caller is trader', async () => {
+    it('should allow anyone to cancel a stale order', async () => {
       const { PerpMarketProxy } = systems();
       const tradersGenerator = toRoundRobinGenerators(shuffle(traders()));
 
@@ -203,9 +162,10 @@ describe('OrderModule Cancelations', () => {
 
       const orderDigestBefore = await PerpMarketProxy.getOrderDigest(trader.accountId, marketId);
       assertBn.equal(order.sizeDelta, orderDigestBefore.sizeDelta);
+      const signer = genOneOf([trader.signer, keeper()]);
       const { receipt } = await withExplicitEvmMine(
         () =>
-          PerpMarketProxy.connect(trader.signer).cancelOrder(trader.accountId, marketId, updateData, {
+          PerpMarketProxy.connect(signer).cancelOrder(trader.accountId, marketId, updateData, {
             value: updateFee,
           }),
         provider()

@@ -377,13 +377,8 @@ contract OrderModule is IOrderModule {
         }
         bool isAccountOwner = msg.sender == account.rbac.owner;
 
-        // If order is stale allow cancelation from owner regardless of price.
-        if (isOrderStale(order.commitmentTime, globalConfig.maxOrderAge)) {
-            // Only allow owner to clear stale orders
-            if (!isAccountOwner) {
-                revert ErrorUtil.OrderStale();
-            }
-        } else {
+        // Only do the price divergence check for non stale orders. All stale orders are allowed to be canceled.
+        if (!isOrderStale(order.commitmentTime, globalConfig.maxOrderAge)) {
             // Order is within settlement window. Check if price tolerance has exceeded.
             uint256 pythPrice = PythUtil.parsePythPrice(
                 globalConfig,
