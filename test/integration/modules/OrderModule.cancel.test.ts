@@ -291,7 +291,12 @@ describe('OrderModule Cancelations', () => {
       );
 
       // Make sure accounting for trader reflect the keeper fee.
-      assertBn.near(accountDigestBefore.collateralUsd.sub(keeperFee), accountDigestAfter.collateralUsd, bn(0.0000001));
+      assertBn.near(
+        // If trader using non sUSD collateral the user will get debt rather than a decrease in collateral.
+        accountDigestBefore.collateralUsd.sub(keeperFee).add(accountDigestAfter.debtUsd),
+        accountDigestAfter.collateralUsd,
+        bn(0.0000001)
+      );
     });
 
     it('should emit all events in correct order');
