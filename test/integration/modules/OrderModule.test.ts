@@ -436,7 +436,8 @@ describe('OrderModule', () => {
           keeperFeeBufferUsd,
           hooks
         ),
-        `PermissionDenied("${trader1.accountId}", "${permission}", "${signerAddress}")`
+        `PermissionDenied("${trader1.accountId}", "${permission}", "${signerAddress}")`,
+        PerpMarketProxy
       );
     });
 
@@ -476,7 +477,8 @@ describe('OrderModule', () => {
           order2.keeperFeeBufferUsd,
           order2.hooks
         ),
-        'CanLiquidatePosition()'
+        'CanLiquidatePosition()',
+        PerpMarketProxy
       );
     });
 
@@ -518,7 +520,8 @@ describe('OrderModule', () => {
           order2.keeperFeeBufferUsd,
           order2.hooks
         ),
-        'PositionFlagged()'
+        'PositionFlagged()',
+        PerpMarketProxy
       );
     });
 
@@ -560,7 +563,8 @@ describe('OrderModule', () => {
           order.keeperFeeBufferUsd,
           order.hooks
         ),
-        'CanLiquidatePosition()'
+        'CanLiquidatePosition()',
+        PerpMarketProxy
       );
     });
 
@@ -1761,7 +1765,8 @@ describe('OrderModule', () => {
         PerpMarketProxy.connect(keeper()).settleOrder(mainTrader.accountId, marketId, updateData, {
           value: updateFee,
         }),
-        'CanLiquidatePosition()'
+        'CanLiquidatePosition()',
+        PerpMarketProxy
       );
     });
 
@@ -2254,7 +2259,11 @@ describe('OrderModule', () => {
       // Size to check fill price
       const size = bn(genNumber(-10, 10));
 
-      await assertRevert(PerpMarketProxy.getFillPrice(invalidMarketId, size), `MarketNotFound("${invalidMarketId}")`);
+      await assertRevert(
+        PerpMarketProxy.getFillPrice(invalidMarketId, size),
+        `MarketNotFound("${invalidMarketId}")`,
+        PerpMarketProxy
+      );
     });
 
     it('should give premium when increasing skew', async () => {

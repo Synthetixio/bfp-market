@@ -74,7 +74,8 @@ describe('PerpRewardDistributor', () => {
       const from = traders()[0].signer;
       await assertRevert(
         PerpRewardDistributor.connect(from).setShouldFailPayout(genBoolean()),
-        `Unauthorized("${await from.getAddress()}")`
+        `Unauthorized("${await from.getAddress()}")`,
+        systems().Core
       );
     });
   });
@@ -109,11 +110,12 @@ describe('PerpRewardDistributor', () => {
       await assertRevert(
         PerpRewardDistributor.connect(owner()).payout(bn(0), invalidPoolId, args.token, genAddress(), bn(0)),
         `InvalidParameter("poolId", "Unexpected poolId")`,
-        PerpRewardDistributor
+        pool().collateral()
       );
     });
 
     it('should revert when not reward manager', async () => {
+      const { Core } = systems();
       const args = {
         poolId: pool().id,
         collateralTypes: [genAddress(), genAddress()],
@@ -126,7 +128,7 @@ describe('PerpRewardDistributor', () => {
       await assertRevert(
         PerpRewardDistributor.connect(from.signer).payout(bn(0), args.poolId, args.token, genAddress(), bn(0)),
         `Unauthorized("${await from.signer.getAddress()}")`,
-        PerpRewardDistributor
+        Core
       );
     });
   });

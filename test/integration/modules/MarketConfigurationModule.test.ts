@@ -56,7 +56,8 @@ describe('MarketConfigurationModule', async () => {
       const { global } = genBootstrap();
       await assertRevert(
         PerpMarketProxy.connect(from).setMarketConfiguration(global),
-        `Unauthorized("${await from.getAddress()}")`
+        `Unauthorized("${await from.getAddress()}")`,
+        PerpMarketProxy
       );
     });
   });
@@ -112,7 +113,8 @@ describe('MarketConfigurationModule', async () => {
 
       await assertRevert(
         PerpMarketProxy.connect(from).setMarketConfigurationById(marketId, specific),
-        `Unauthorized("${await from.getAddress()}")`
+        `Unauthorized("${await from.getAddress()}")`,
+        PerpMarketProxy
       );
     });
 
@@ -124,7 +126,8 @@ describe('MarketConfigurationModule', async () => {
 
       await assertRevert(
         PerpMarketProxy.connect(from).setMarketConfigurationById(notFoundMarketId, specific),
-        `MarketNotFound("${notFoundMarketId}")`
+        `MarketNotFound("${notFoundMarketId}")`,
+        PerpMarketProxy
       );
     });
   });
