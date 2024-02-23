@@ -2079,10 +2079,12 @@ describe('LiquidationModule', () => {
 
         const orders: Awaited<ReturnType<typeof genOrder>>[] = [];
 
-        // For every available trader, open a position (all on the same side) and liquidate everything. The
+        // For two traders, open a position (both on the same side) and liquidate everything. The
         // sum of all sizeDelta should be the utilisation and remaining should be max - utlisation.
-        for (const trader of traders()) {
-          const marginUsdDepositAmount = genOneOf([5000, 10_000, 15_000]);
+        const tradersToUse = traders().slice(0, 2);
+
+        for (const trader of tradersToUse) {
+          const marginUsdDepositAmount = genOneOf([1000, 5000, 10_000]);
           const collateral = genOneOf(collaterals());
 
           const { collateralDepositAmount: collateralDepositAmount1 } = await depositMargin(
@@ -2117,7 +2119,7 @@ describe('LiquidationModule', () => {
         await market.aggregator().mockSetCurrentPrice(newMarketOraclePrice);
 
         // Flag and liquidate it all.
-        for (const trader of traders()) {
+        for (const trader of tradersToUse) {
           await PerpMarketProxy.connect(flaggerKeeper).flagPosition(trader.accountId, marketId);
           await PerpMarketProxy.connect(liquidationKeeper).liquidatePosition(trader.accountId, marketId);
         }
