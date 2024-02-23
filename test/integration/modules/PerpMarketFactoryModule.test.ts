@@ -44,10 +44,13 @@ describe('PerpMarketFactoryModule', () => {
       const from = owner();
 
       const address = genAddress();
-      await assertRevert(
-        PerpMarketProxy.connect(from).setSynthetix(address),
-        'Error: transaction reverted in contract unknown'
-      );
+      try {
+        // assertRevert couldn't handle this error.
+        await PerpMarketProxy.connect(from).setSynthetix(address);
+        assert.fail('should have reverted');
+      } catch (error: any) {
+        assert.ok(error.error.reason.includes('transaction reverted in contract unknown'));
+      }
     });
 
     it('should revert when not owner', async () => {
@@ -56,7 +59,8 @@ describe('PerpMarketFactoryModule', () => {
       const address = genAddress();
       await assertRevert(
         PerpMarketProxy.connect(from).setSynthetix(address),
-        `Unauthorized("${await from.getAddress()}")`
+        `Unauthorized("${await from.getAddress()}")`,
+        PerpMarketProxy
       );
     });
   });
@@ -79,7 +83,8 @@ describe('PerpMarketFactoryModule', () => {
       const address = genAddress();
       await assertRevert(
         PerpMarketProxy.connect(from).setSpotMarket(address),
-        `Unauthorized("${await from.getAddress()}")`
+        `Unauthorized("${await from.getAddress()}")`,
+        PerpMarketProxy
       );
     });
   });
@@ -100,7 +105,11 @@ describe('PerpMarketFactoryModule', () => {
       const { PerpMarketProxy } = systems();
       const from = traders()[0].signer;
       const address = genAddress();
-      await assertRevert(PerpMarketProxy.connect(from).setPyth(address), `Unauthorized("${await from.getAddress()}")`);
+      await assertRevert(
+        PerpMarketProxy.connect(from).setPyth(address),
+        `Unauthorized("${await from.getAddress()}")`,
+        PerpMarketProxy
+      );
     });
   });
 
@@ -122,7 +131,8 @@ describe('PerpMarketFactoryModule', () => {
       const nodeId = genBytes32();
       await assertRevert(
         PerpMarketProxy.connect(from).setEthOracleNodeId(nodeId),
-        `Unauthorized("${await from.getAddress()}")`
+        `Unauthorized("${await from.getAddress()}")`,
+        PerpMarketProxy
       );
     });
   });
@@ -145,7 +155,8 @@ describe('PerpMarketFactoryModule', () => {
       const implementation = genAddress();
       await assertRevert(
         PerpMarketProxy.connect(from).setRewardDistributorImplementation(implementation),
-        `Unauthorized("${await from.getAddress()}")`
+        `Unauthorized("${await from.getAddress()}")`,
+        PerpMarketProxy
       );
     });
   });

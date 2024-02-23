@@ -48,7 +48,8 @@ describe('OrderModule Cancelations', () => {
 
       await assertRevert(
         PerpMarketProxy.cancelOrder(trader.accountId, invalidMarketId, updateData),
-        `MarketNotFound("${invalidMarketId}")`
+        `MarketNotFound("${invalidMarketId}")`,
+        PerpMarketProxy
       );
     });
 
@@ -76,7 +77,8 @@ describe('OrderModule Cancelations', () => {
 
       await assertRevert(
         PerpMarketProxy.cancelOrder(invalidAccountId, marketId, updateData),
-        `AccountNotFound("${invalidAccountId}")`
+        `AccountNotFound("${invalidAccountId}")`,
+        PerpMarketProxy
       );
     });
 
@@ -88,7 +90,11 @@ describe('OrderModule Cancelations', () => {
 
       const { updateData } = await getPythPriceDataByMarketId(bs, marketId, publishTime);
 
-      await assertRevert(PerpMarketProxy.cancelOrder(trader.accountId, marketId, updateData), `OrderNotFound()`);
+      await assertRevert(
+        PerpMarketProxy.cancelOrder(trader.accountId, marketId, updateData),
+        `OrderNotFound()`,
+        PerpMarketProxy
+      );
     });
 
     it('should revert when order not ready', async () => {
@@ -109,7 +115,11 @@ describe('OrderModule Cancelations', () => {
 
       const { updateData } = await getPythPriceDataByMarketId(bs, marketId, publishTime);
 
-      await assertRevert(PerpMarketProxy.cancelOrder(trader.accountId, marketId, updateData), `OrderNotReady()`);
+      await assertRevert(
+        PerpMarketProxy.cancelOrder(trader.accountId, marketId, updateData),
+        `OrderNotReady()`,
+        PerpMarketProxy
+      );
     });
 
     it('should revert when price update from pyth is invalid');
@@ -134,7 +144,8 @@ describe('OrderModule Cancelations', () => {
       const fillPrice = await PerpMarketProxy.getFillPrice(marketId, order.sizeDelta);
       await assertRevert(
         PerpMarketProxy.connect(keeper()).cancelOrder(trader.accountId, marketId, updateData, { value: updateFee }),
-        `PriceToleranceNotExceeded("${order.sizeDelta}", "${fillPrice}", "${order.limitPrice}")`
+        `PriceToleranceNotExceeded("${order.sizeDelta}", "${fillPrice}", "${order.limitPrice}")`,
+        PerpMarketProxy
       );
     });
 
@@ -282,7 +293,8 @@ describe('OrderModule Cancelations', () => {
 
       await assertRevert(
         PerpMarketProxy.cancelStaleOrder(trader.accountId, invalidMarketId),
-        `MarketNotFound("${invalidMarketId}")`
+        `MarketNotFound("${invalidMarketId}")`,
+        PerpMarketProxy
       );
     });
 
@@ -303,7 +315,11 @@ describe('OrderModule Cancelations', () => {
 
       const invalidAccountId = bn(42069);
 
-      await assertRevert(PerpMarketProxy.cancelStaleOrder(invalidAccountId, marketId), `OrderNotFound()`);
+      await assertRevert(
+        PerpMarketProxy.cancelStaleOrder(invalidAccountId, marketId),
+        `OrderNotFound()`,
+        PerpMarketProxy
+      );
     });
 
     it('should revert when order does not exists', async () => {
@@ -311,7 +327,11 @@ describe('OrderModule Cancelations', () => {
 
       const { trader, marketId } = await depositMargin(bs, genTrader(bs));
 
-      await assertRevert(PerpMarketProxy.cancelStaleOrder(trader.accountId, marketId), `OrderNotFound()`);
+      await assertRevert(
+        PerpMarketProxy.cancelStaleOrder(trader.accountId, marketId),
+        `OrderNotFound()`,
+        PerpMarketProxy
+      );
     });
 
     it('should revert when order not ready', async () => {
@@ -329,7 +349,11 @@ describe('OrderModule Cancelations', () => {
         order.hooks
       );
 
-      await assertRevert(PerpMarketProxy.cancelStaleOrder(trader.accountId, marketId), `OrderNotStale()`);
+      await assertRevert(
+        PerpMarketProxy.cancelStaleOrder(trader.accountId, marketId),
+        `OrderNotStale()`,
+        PerpMarketProxy
+      );
     });
 
     it('should revert if order not stale', async () => {
@@ -355,7 +379,8 @@ describe('OrderModule Cancelations', () => {
 
       await assertRevert(
         PerpMarketProxy.connect(tradersGenerator.next().value.signer).cancelStaleOrder(trader.accountId, marketId),
-        `OrderNotStale()`
+        `OrderNotStale()`,
+        PerpMarketProxy
       );
     });
 

@@ -82,7 +82,8 @@ describe('MarginModule', async () => {
           collateral.synthMarketId(),
           collateralDepositAmount.mul(-1)
         ),
-        `OrderFound()`
+        `OrderFound()`,
+        PerpMarketProxy
       );
     });
 
@@ -101,7 +102,8 @@ describe('MarginModule', async () => {
           collateral.synthMarketId(),
           amountDelta
         ),
-        `ZeroAmount()`
+        `ZeroAmount()`,
+        PerpMarketProxy
       );
     });
 
@@ -170,7 +172,8 @@ describe('MarginModule', async () => {
           gTrader2.collateral.synthMarketId(),
           gTrader2.collateralDepositAmount
         ),
-        `OrderFound()`
+        `OrderFound()`,
+        PerpMarketProxy
       );
 
       // (withdraw) Attempt to withdraw previously deposited margin but expect fail.
@@ -181,7 +184,8 @@ describe('MarginModule', async () => {
           collateral.synthMarketId(),
           collateralDepositAmount.mul(-1)
         ),
-        `OrderFound()`
+        `OrderFound()`,
+        PerpMarketProxy
       );
     });
 
@@ -208,7 +212,8 @@ describe('MarginModule', async () => {
           collateral.synthMarketId(),
           collateralDepositAmount
         ),
-        `PermissionDenied("${trader1.accountId}", "${permission}", "${signerAddress}")`
+        `PermissionDenied("${trader1.accountId}", "${permission}", "${signerAddress}")`,
+        PerpMarketProxy
       );
     });
 
@@ -396,7 +401,8 @@ describe('MarginModule', async () => {
             collateral.synthMarketId(),
             amountDelta
           ),
-          `PermissionDenied("${invalidAccountId}"`
+          `PermissionDenied("${invalidAccountId}"`,
+          PerpMarketProxy
         );
       });
 
@@ -435,7 +441,8 @@ describe('MarginModule', async () => {
             invalidSynthMarketId,
             amountDelta
           ),
-          `UnsupportedCollateral("${invalidSynthMarketId}")`
+          `UnsupportedCollateral("${invalidSynthMarketId}")`,
+          PerpMarketProxy
         );
       });
 
@@ -457,7 +464,8 @@ describe('MarginModule', async () => {
             collateral.synthMarketId(),
             depositAmountDelta
           ),
-          `MaxCollateralExceeded("${depositAmountDelta}", "${collateral.max}")`
+          `MaxCollateralExceeded("${depositAmountDelta}", "${collateral.max}")`,
+          PerpMarketProxy
         );
       });
 
@@ -492,7 +500,8 @@ describe('MarginModule', async () => {
             collateral.synthMarketId(),
             depositAmountDelta2
           ),
-          `MaxCollateralExceeded("${depositAmountDelta2}", "${collateral.max}")`
+          `MaxCollateralExceeded("${depositAmountDelta2}", "${collateral.max}")`,
+          PerpMarketProxy
         );
       });
 
@@ -516,7 +525,8 @@ describe('MarginModule', async () => {
             collateral.synthMarketId(),
             amountToDeposit
           ),
-          `InsufficientAllowance("${amountToDeposit}", "${amountAvailable}")`
+          `InsufficientAllowance("${amountToDeposit}", "${amountAvailable}")`,
+          collateral.contract
         );
       });
 
@@ -1580,7 +1590,8 @@ describe('MarginModule', async () => {
         const signerAddress = await trader2.signer.getAddress();
         await assertRevert(
           PerpMarketProxy.connect(trader2.signer).withdrawAllCollateral(trader1.accountId, market.marketId()),
-          `PermissionDenied("${trader1.accountId}", "${permission}", "${signerAddress}")`
+          `PermissionDenied("${trader1.accountId}", "${permission}", "${signerAddress}")`,
+          PerpMarketProxy
         );
       });
 
@@ -1629,7 +1640,8 @@ describe('MarginModule', async () => {
           maxAllowables,
           rewardDistributors
         ),
-        `ArrayLengthMismatch()`
+        `ArrayLengthMismatch()`,
+        PerpMarketProxy
       );
     });
 
@@ -1788,7 +1800,8 @@ describe('MarginModule', async () => {
           maxAllowables,
           rewardDistributors
         ),
-        `MissingRequiredCollateral("${collateral.synthMarketId()}")`
+        `MissingRequiredCollateral("${collateral.synthMarketId()}")`,
+        PerpMarketProxy
       );
     });
 
@@ -1830,7 +1843,8 @@ describe('MarginModule', async () => {
       const from = await traders()[0].signer.getAddress();
       await assertRevert(
         PerpMarketProxy.connect(from).setMarginCollateralConfiguration([], [], [], []),
-        `Unauthorized("${from}")`
+        `Unauthorized("${from}")`,
+        PerpMarketProxy
       );
     });
 
@@ -1844,7 +1858,8 @@ describe('MarginModule', async () => {
           [bn(-1)],
           [collaterals()[0].rewardDistributorAddress()]
         ),
-        'Error: value out-of-bounds'
+        'Error: value out-of-bounds',
+        PerpMarketProxy
       );
     });
 
@@ -1864,7 +1879,8 @@ describe('MarginModule', async () => {
           maxAllowables,
           rewardDistributors
         ),
-        `transaction reverted in contract unknown: 0x`
+        `transaction reverted in contract unknown: 0x`,
+        PerpMarketProxy
       );
     });
 
@@ -1887,7 +1903,8 @@ describe('MarginModule', async () => {
           maxAllowables,
           rewardDistributors
         ),
-        `InvalidRewardDistributor("${rewardDistributor}")`
+        `InvalidRewardDistributor("${rewardDistributor}")`,
+        PerpMarketProxy
       );
     });
 
@@ -1910,7 +1927,8 @@ describe('MarginModule', async () => {
           maxAllowables,
           rewardDistributors
         ),
-        `InvalidRewardDistributor("${rewardDistributor}")`
+        `InvalidRewardDistributor("${rewardDistributor}")`,
+        PerpMarketProxy
       );
     });
 
@@ -1926,7 +1944,8 @@ describe('MarginModule', async () => {
 
       await assertRevert(
         PerpMarketProxy.connect(from).setCollateralMaxAllowable(synthMarketId(), bn(-1)),
-        'Error: value out-of-bounds'
+        'Error: value out-of-bounds',
+        PerpMarketProxy
       );
     });
 
@@ -1936,7 +1955,8 @@ describe('MarginModule', async () => {
       const from = await traders()[0].signer.getAddress();
       await assertRevert(
         PerpMarketProxy.connect(from).setCollateralMaxAllowable(bn(0), bn(0)),
-        `Unauthorized("${from}")`
+        `Unauthorized("${from}")`,
+        PerpMarketProxy
       );
     });
 
@@ -1948,7 +1968,8 @@ describe('MarginModule', async () => {
 
       await assertRevert(
         PerpMarketProxy.connect(from).setCollateralMaxAllowable(invalidCollateralId, bn(0)),
-        `UnsupportedCollateral("${invalidCollateralId}")`
+        `UnsupportedCollateral("${invalidCollateralId}")`,
+        PerpMarketProxy
       );
     });
 
