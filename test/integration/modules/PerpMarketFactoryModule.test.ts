@@ -27,6 +27,7 @@ import {
   fastForwardBySec,
   setMarketConfiguration,
   setMarketConfigurationById,
+  withExplicitEvmMine,
 } from '../../helpers';
 import { Collateral, Market, Trader } from '../../typed';
 import { isSameSide } from '../../calculations';
@@ -766,7 +767,10 @@ describe('PerpMarketFactoryModule', () => {
       assertBn.isZero((await PerpMarketProxy.getPositionDigest(trader.accountId, marketId)).size);
 
       // Withdraw all collateral out of perp market.
-      await PerpMarketProxy.connect(trader.signer).withdrawAllCollateral(trader.accountId, marketId);
+      await withExplicitEvmMine(
+        () => PerpMarketProxy.connect(trader.signer).withdrawAllCollateral(trader.accountId, marketId),
+        provider()
+      );
 
       // Note reportedDebt is ZERO however total market debt is gt 0.
       const reportedDebt = await PerpMarketProxy.reportedDebt(marketId);

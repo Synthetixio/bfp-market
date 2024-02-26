@@ -1191,8 +1191,7 @@ describe('OrderModule', () => {
     it('should accurately account for utilization when holding for a long time', async () => {
       const { PerpMarketProxy, Core } = systems();
 
-      const { collateral, collateralDepositAmount, marginUsdDepositAmount, trader, marketId, market } =
-        await depositMargin(bs, genTrader(bs));
+      const { collateral, collateralDepositAmount, trader, marketId, market } = await depositMargin(bs, genTrader(bs));
 
       const order = await genOrder(bs, market, collateral, collateralDepositAmount, {
         desiredLeverage: genOneOf([1, 2]),
@@ -1271,7 +1270,9 @@ describe('OrderModule', () => {
         genTrader(bs, { desiredTrader: tradersGenerator.next().value })
       );
 
-      const openOrder = await genOrder(bs, market, collateral, collateralDepositAmount);
+      const openOrder = await genOrder(bs, market, collateral, collateralDepositAmount, {
+        desiredLeverage: 1,
+      });
       const { receipt, settlementTime } = await commitAndSettle(bs, marketId, trader, openOrder);
       const event = findEventSafe(receipt, 'OrderSettled', PerpMarketProxy);
       assertBn.isZero(event.args.accruedUtilization);
@@ -1281,7 +1282,7 @@ describe('OrderModule', () => {
       const { utilizationRate } = await PerpMarketProxy.getMarketDigest(marketId);
       // Keep the position open but flip it to short
       const flipToShortOrder = await genOrder(bs, market, collateral, collateralDepositAmount, {
-        desiredSize: openOrder.sizeDelta.mul(-2),
+        desiredSize: wei(openOrder.sizeDelta).mul(-2).toBN(),
       });
 
       const { receipt: receipt2 } = await commitAndSettle(bs, marketId, trader, flipToShortOrder);
@@ -1305,7 +1306,9 @@ describe('OrderModule', () => {
         bs,
         genTrader(bs, { desiredTrader: tradersGenerator.next().value, desiredMarket: market })
       );
-      const openOrder1 = await genOrder(bs, market, collateral1, collateralDepositAmount1);
+      const openOrder1 = await genOrder(bs, market, collateral1, collateralDepositAmount1, {
+        desiredLeverage: genNumber(1, 2),
+      });
 
       const { settlementTime: settlementTime1 } = await commitAndSettle(bs, marketId, trader1, openOrder1);
 
