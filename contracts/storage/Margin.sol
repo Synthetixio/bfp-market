@@ -79,7 +79,7 @@ library Margin {
     /**
      * @dev Reevaluates the collateral and debt for `accountId` with `amountDeltaUsd`. When amount is negative,
      * portion of their collateral is deducted. If positive, an equivalent amount of sUSD is credited to the
-     * account. Returns the collateral and debt delta's.
+     * account. Note: amountDeltaUsd already takes previous debt into account.
      */
     function updateAccountDebtAndCollateral(
         Margin.Data storage accountMargin,
@@ -112,40 +112,31 @@ library Margin {
         int128 debtAmountDeltaUsd = 0;
         int128 sUsdCollateralDelta = 0;
 
+        // Store some current values to make it easier to calculate the delta's.
         uint128 absAmountDeltaUsd = MathUtil.abs(amountDeltaUsd).to128();
-        // >0 means to add sUSD to this account's margin (realized profit).
-        if (amountDeltaUsd > 0) {
-            if (absAmountDeltaUsd > accountMargin.debtUsd) {
-                // Enough profit to cover outstanding debt, this means we can pay off the debt and  increase sUSD collateral with the rest
-                debtAmountDeltaUsd = -accountMargin.debtUsd.toInt(); // Debt should be reduced when position in profit
+        uint256 availableUsdCollateral = accountMargin.collaterals[SYNTHETIX_USD_MARKET_ID];
+        uint128 previousDebt = accountMargin.debtUsd;
+
+        // >0 means we had a winning position, including the outstanding debt
+        if (amountDeltaUsd >= 0) {
+            accountMargin.debtUsd = 0;
+            accountMargin.collaterals[SYNTHETIX_USD_MARKET_ID] += absAmountDeltaUsd;
+        }
+        // < 0 means we had a losing position, note that the trade might have been profitable, but the account's previous debt was bigger.
+        else {
+            int256 sUSDCollateralAfterDebtPayment = availableUsdCollateral.toInt() + amountDeltaUsd;
+            if (sUSDCollateralAfterDebtPayment >= 0) {
+                accountMargin.collaterals[SYNTHETIX_USD_MARKET_ID] = sUSDCollateralAfterDebtPayment.toUint();
                 accountMargin.debtUsd = 0;
-                uint128 profitAfterDebt = absAmountDeltaUsd - accountMargin.debtUsd;
-                accountMargin.collaterals[SYNTHETIX_USD_MARKET_ID] += profitAfterDebt;
-                sUsdCollateralDelta = profitAfterDebt.toInt();
             } else {
-                // The trader has an outstanding debt larger than the profit, just reduce the debt with all the profits
-                accountMargin.debtUsd -= absAmountDeltaUsd;
-                debtAmountDeltaUsd = -amountDeltaUsd.to128();
-            }
-        } else {
-            // <0 means a realized loss and we need to increase their debt or pay with sUSD collateral.
-            uint256 availableUsdCollateral = accountMargin.collaterals[SYNTHETIX_USD_MARKET_ID];
-            int256 newDebt = availableUsdCollateral.toInt() + amountDeltaUsd;
-            if (newDebt > 0) {
-                // We have enough sUSD to cover the loss, just deduct from collateral.
-                accountMargin.collaterals[SYNTHETIX_USD_MARKET_ID] -= absAmountDeltaUsd;
-                sUsdCollateralDelta = -absAmountDeltaUsd.toInt();
-                // No changes to debt needed.
-            } else {
-                // We don't have enough sUSD to cover the loss, deduct what we can from the sUSD collateral and increase debt with the rest.
-                uint128 newDebtAbs = MathUtil.abs(newDebt).to128();
                 accountMargin.collaterals[SYNTHETIX_USD_MARKET_ID] = 0;
-                sUsdCollateralDelta = -availableUsdCollateral.to128().toInt();
-                // Debt should increase as we're lost money.
-                accountMargin.debtUsd += newDebtAbs;
-                debtAmountDeltaUsd = newDebtAbs.toInt();
+                accountMargin.debtUsd = MathUtil.abs(sUSDCollateralAfterDebtPayment).to128();
             }
         }
+        debtAmountDeltaUsd = accountMargin.debtUsd.toInt() - previousDebt.toInt();
+        sUsdCollateralDelta =
+            accountMargin.collaterals[SYNTHETIX_USD_MARKET_ID].toInt().to128() -
+            availableUsdCollateral.toInt().to128();
         market.updateDebtAndCollateral(debtAmountDeltaUsd, sUsdCollateralDelta);
     }
 

@@ -40,7 +40,7 @@ import { calcFillPrice, calcOrderFees } from '../../calculations';
 import { PerpMarketProxy } from '../../generated/typechain';
 import { shuffle } from 'lodash';
 
-describe.only('OrderModule', () => {
+describe('OrderModule', () => {
   const bs = bootstrap(genBootstrap());
   const {
     systems,
