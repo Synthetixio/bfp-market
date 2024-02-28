@@ -184,10 +184,21 @@ library PerpMarket {
         PerpMarketConfiguration.GlobalData storage globalConfig
     ) internal view returns (uint128) {
         PerpMarketConfiguration.Data storage marketConfig = PerpMarketConfiguration.load(self.id);
+        // withdrawableUsd = our markets creditCapacity + all deposited collateral.
         uint256 withdrawableUsd = globalConfig.synthetix.getWithdrawableMarketUsd(self.id);
-        uint256 delegatedCollateralValueUsd = withdrawableUsd - getTotalCollateralValueUsd(self);
         uint256 lockedCollateralUsd = self.size.mulDecimal(price).mulDecimal(marketConfig.minCreditPercent.to256());
-        return lockedCollateralUsd.divDecimal(delegatedCollateralValueUsd).to128();
+        if (lockedCollateralUsd == 0) {
+            // If we dont have any postions open, we're at 0% utilisation.
+            return 0;
+        }
+        // If we remove collateral deposited from traders we get the delegatedCollateral value.
+        int256 delegatedCollateralValueUsd = withdrawableUsd.toInt() - getTotalCollateralValueUsd(self).toInt();
+        if (delegatedCollateralValueUsd < 0) {
+            // This means we're acutally above full utilisation and stakers would be liquidated. From our point of view we're at max utilisation.
+            return DecimalMath.UNIT.to128();
+        }
+
+        return lockedCollateralUsd.divDecimal(delegatedCollateralValueUsd.toUint()).to128();
     }
 
     function getCurrentUtilizationRate(
