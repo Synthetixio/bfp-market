@@ -54,7 +54,7 @@ describe('PerpMarketFactoryModule Utilization', () => {
       assertBn.equal(marketDigest2.utilizationRate, bn(0));
     });
 
-    it('can handle utilization more than 100%', async () => {
+    it('should support collateral utilization above 100%', async () => {
       const { PerpMarketProxy, Core } = systems();
       const market = genOneOf(markets());
       const marketId = market.marketId();
