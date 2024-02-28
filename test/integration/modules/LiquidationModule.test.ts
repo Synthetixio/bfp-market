@@ -175,7 +175,7 @@ describe('LiquidationModule', () => {
       assertBn.equal(flagEvent.args.flagKeeperReward, expectedFlagReward.toBN());
     });
 
-    it('should charge correct flagKeeperReward notional bigger than collateral', async () => {
+    it('should charge the larger flagKeeperReward when notional value > collateral value', async () => {
       const { PerpMarketProxy } = systems();
 
       const { trader, market, marketId, collateral, collateralDepositAmount } = await depositMargin(bs, genTrader(bs));
@@ -460,7 +460,42 @@ describe('LiquidationModule', () => {
       assertBn.isZero(totalTraderDebtUsdAfter);
     });
 
-    it('should not modify any existing collateral as margin');
+    it('should remove all margin collateral on flag', async () => {
+      const { PerpMarketProxy } = systems();
+
+      const orderSide = genSide();
+      const { trader, market, marketId, collateral, collateralDepositAmount } = await depositMargin(bs, genTrader(bs));
+      const order1 = await genOrder(bs, market, collateral, collateralDepositAmount, {
+        desiredLeverage: 10,
+        desiredSide: orderSide,
+      });
+      await commitAndSettle(bs, marketId, trader, order1);
+
+      const d1 = await PerpMarketProxy.getMarginDigest(trader.accountId, marketId);
+      assertBn.gt(d1.marginUsd, 0);
+      assertBn.gt(d1.collateralUsd, 0);
+
+      // Commit a new order but don't settle.
+      const order2 = await genOrder(bs, market, collateral, collateralDepositAmount, {
+        desiredLeverage: 0.5,
+        desiredSide: orderSide,
+      });
+      await commitOrder(bs, marketId, trader, order2);
+
+      // Price moves 10% and results in a healthFactor of < 1.
+      const newMarketOraclePrice = wei(order2.oraclePrice)
+        .mul(orderSide === 1 ? 0.9 : 1.1)
+        .toBN();
+      await market.aggregator().mockSetCurrentPrice(newMarketOraclePrice);
+      const flagKeeper = keeper2();
+
+      await PerpMarketProxy.connect(flagKeeper).flagPosition(trader.accountId, marketId);
+
+      // Verify all collateral deposited must be rmrf to market.
+      const d2 = await PerpMarketProxy.getMarginDigest(trader.accountId, marketId);
+      assertBn.isZero(d2.marginUsd);
+      assertBn.isZero(d2.collateralUsd);
+    });
 
     forEach([
       ['sUSD', () => getSusdCollateral(collaterals())],
@@ -833,8 +868,6 @@ describe('LiquidationModule', () => {
       assertBn.isZero(d2.skew);
     });
 
-    it('partial liquidation should update reported debt/total debt');
-
     it('full liquidation should update reported debt/total debt', async () => {
       const { PerpMarketProxy, Core } = systems();
       const orderSide = genSide();
@@ -1016,41 +1049,6 @@ describe('LiquidationModule', () => {
         `PositionNotFlagged()`,
         PerpMarketProxy
       );
-    });
-
-    it('should remove all position collateral from market on liquidation', async () => {
-      const { PerpMarketProxy } = systems();
-
-      // Commit, settle, place position into liquidation, flag for liquidation. For the purposes
-      // of this test, ensure we can liquidate the entire position in one call (hence the smaller
-      // marginUsd deposit amounts).
-      const orderSide = genSide();
-      const { trader, market, marketId, collateral, collateralDepositAmount } = await depositMargin(
-        bs,
-        genTrader(bs, { desiredMarginUsdDepositAmount: genOneOf([1000, 3000, 5000]) })
-      );
-      const order = await genOrder(bs, market, collateral, collateralDepositAmount, {
-        desiredLeverage: 10,
-        desiredSide: orderSide,
-      });
-      await commitAndSettle(bs, marketId, trader, order);
-
-      const d1 = await PerpMarketProxy.getPositionDigest(trader.accountId, marketId);
-
-      const newMarketOraclePrice = wei(order.oraclePrice)
-        .mul(orderSide === 1 ? 0.9 : 1.1)
-        .toBN();
-      await market.aggregator().mockSetCurrentPrice(newMarketOraclePrice);
-
-      await PerpMarketProxy.connect(keeper()).flagPosition(trader.accountId, marketId);
-      await PerpMarketProxy.connect(keeper()).liquidatePosition(trader.accountId, marketId);
-
-      const d2 = await PerpMarketProxy.getPositionDigest(trader.accountId, marketId);
-      const { collateralUsd } = await PerpMarketProxy.getAccountDigest(trader.accountId, marketId);
-
-      assertBn.gt(d1.remainingMarginUsd, d2.remainingMarginUsd);
-      assertBn.isZero(d2.remainingMarginUsd);
-      assertBn.isZero(collateralUsd);
     });
 
     it('should remove all market deposited collateral after full liquidation', async () => {
@@ -2265,6 +2263,7 @@ describe('LiquidationModule', () => {
       it('should revert when pd is below maxPd but liquidation happens in the same block');
     });
   });
+
   describe('getLiquidationMarginUsd', () => {
     it('should revert when invalid marketId', async () => {
       const { PerpMarketProxy } = systems();
