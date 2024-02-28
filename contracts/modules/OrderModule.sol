@@ -42,6 +42,7 @@ contract OrderModule is IOrderModule {
         uint256 fillPrice;
         uint128 accountDebt;
         uint128 updatedMarketSize;
+        int128 updatedMarketSkew;
         Position.ValidatedTrade trade;
         Position.TradeParams params;
     }
@@ -272,7 +273,8 @@ contract OrderModule is IOrderModule {
         );
 
         runtime.updatedMarketSize = (market.size.to256() + MathUtil.abs(runtime.trade.newPosition.size) - MathUtil.abs(position.size)).to128();
-        market.skew = market.skew + runtime.trade.newPosition.size - position.size;
+        runtime.updatedMarketSkew = market.skew + runtime.trade.newPosition.size - position.size;
+        market.skew = runtime.updatedMarketSkew;
         market.size = runtime.updatedMarketSize;
 
         // We want to validateTrade and update market size before we recompute utilisation
@@ -322,7 +324,7 @@ contract OrderModule is IOrderModule {
             runtime.accountDebt
         );
 
-        emit MarketSizeUpdated(marketId, runtime.updatedMarketSize);
+        emit MarketSizeUpdated(marketId, runtime.updatedMarketSize, runtime.updatedMarketSkew);
 
         // Validate and perform the hook post settlement execution.
         validateOrderHooks(order.hooks);

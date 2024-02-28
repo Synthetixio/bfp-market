@@ -1448,7 +1448,7 @@ describe('MarginModule', async () => {
               `MarketUsdWithdrawn\\(${marketId}, "${keeperAddress}", ${closeEventArgs?.keeperFee}, "${PerpMarketProxy.address}",`
             ), // Withdraw sUSD to pay keeper, note here that this amount is covered by the traders losses, so this amount will be included in MarketUsdDeposited (+ tail properties omitted)
             `OrderSettled(${orderSettledEventArgs})`,
-            `MarketSizeUpdated(${marketId}, 0)`,
+            `MarketSizeUpdated(${marketId}, 0, 0)`,
           ],
           // PerpsMarket abi gets events from Core, SpotMarket, Pyth and ERC20 added
           extendContractAbi(
