@@ -12,4 +12,7 @@ interface IBasePerpMarket {
 
     // @notice Emitted when an order is canceled.
     event OrderCanceled(uint128 accountId, uint128 marketId, uint256 keeperFee, uint256 commitmentTime);
+
+    // @notice Emitted when the market's size is updated either due to orders or liquidations.
+    event MarketSizeUpdated(uint128 marketId, uint128 size);
 }

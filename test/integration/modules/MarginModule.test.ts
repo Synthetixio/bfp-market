@@ -1414,10 +1414,25 @@ describe('MarginModule', async () => {
           .sub(closeEventArgs?.accruedUtilization);
         const collateralDiffAmount = usdDiffAmount.div(newCollateralPrice);
         const { debtUsd } = await PerpMarketProxy.getAccountDigest(trader.accountId, marketId);
+
         // Assert close position call. We want to make sure we've interacted with v3 Core correctly.
         //
         // `usdDiffAmount` will have some rounding errors so make sure our calculated is "near".
         assertBn.near(debtUsd, usdDiffAmount.abs().toBN(), bn(0.000001));
+
+        const orderSettledEventArgs = [
+          `${trader.accountId}`,
+          `${marketId}`,
+          `${blockTimestamp}`,
+          `${closeOrder.sizeDelta}`,
+          `${closeOrder.orderFee}`,
+          `${closeEventArgs?.keeperFee}`,
+          `${closeEventArgs?.accruedFunding}`,
+          `${closeEventArgs?.accruedUtilization}`,
+          `${closeEventArgs?.pnl}`,
+          `${closeOrder.fillPrice}`,
+          `${debtUsd}`,
+        ].join(', ');
 
         // Assert events from all contracts, to make sure CORE's market manager is paid correctly
         await assertEvents(
@@ -1427,14 +1442,13 @@ describe('MarginModule', async () => {
             /PriceFeedUpdate/,
             // Funding recomputed, don't care about the exact values here.
             /FundingRecomputed/,
-
             /UtilizationRecomputed/,
-
             `Transfer("${ADDRESS0}", "${keeperAddress}", ${closeEventArgs?.keeperFee})`, // Part of withdrawing sUSD to pay keeper
             new RegExp(
               `MarketUsdWithdrawn\\(${marketId}, "${keeperAddress}", ${closeEventArgs?.keeperFee}, "${PerpMarketProxy.address}",`
             ), // Withdraw sUSD to pay keeper, note here that this amount is covered by the traders losses, so this amount will be included in MarketUsdDeposited (+ tail properties omitted)
-            `OrderSettled(${trader.accountId}, ${marketId}, ${blockTimestamp}, ${closeOrder.sizeDelta}, ${closeOrder.orderFee}, ${closeEventArgs?.keeperFee}, ${closeEventArgs?.accruedFunding}, ${closeEventArgs?.accruedUtilization}, ${closeEventArgs?.pnl}, ${closeOrder.fillPrice}, ${debtUsd})`, // Order settled.
+            `OrderSettled(${orderSettledEventArgs})`,
+            `MarketSizeUpdated(${marketId}, 0)`,
           ],
           // PerpsMarket abi gets events from Core, SpotMarket, Pyth and ERC20 added
           extendContractAbi(
@@ -1449,13 +1463,13 @@ describe('MarginModule', async () => {
               ])
           )
         );
+
         // Note: payDebt will mint the sUSD.
         await payDebt(bs, marketId, trader);
 
         // Actually do the withdraw.
         await PerpMarketProxy.connect(trader.signer).withdrawAllCollateral(trader.accountId, marketId);
 
-        const expectedCollateralBalanceAfterTrade = wei(startingCollateralBalance).add(collateralDiffAmount).toBN();
         const balanceAfterTrade = await collateral.contract.balanceOf(traderAddress);
 
         // We expect to be losing.
