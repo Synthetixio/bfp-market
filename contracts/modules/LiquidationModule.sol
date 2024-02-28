@@ -65,8 +65,12 @@ contract LiquidationModule is ILiquidationModule {
         market.updateAccumulatedLiquidation(liqSize);
 
         // Update market to reflect state of liquidated position.
-        market.skew = market.skew - oldPosition.size + newPosition.size;
-        market.size -= liqSize;
+        uint128 updatedMarketSize = market.size - liqSize;
+        int128 updatedMarketSkew = market.skew - oldPosition.size + newPosition.size;
+        market.skew = updatedMarketSkew;
+        market.size = updatedMarketSize;
+
+        emit MarketSizeUpdated(marketId, updatedMarketSize, updatedMarketSkew);
 
         // Update market debt relative to the keeperFee incurred.
         market.updateDebtCorrection(market.positions[accountId], newPosition);

@@ -738,7 +738,7 @@ describe('OrderModule', () => {
       const timestamp = block.timestamp;
 
       const { args: orderSettledArgs } = findEventSafe(receipt, 'OrderSettled', PerpMarketProxy) || {};
-      const orderSettledEventProperties = [
+      const orderSettledEventArgs = [
         trader.accountId,
         marketId,
         timestamp,
@@ -751,7 +751,7 @@ describe('OrderModule', () => {
         order.fillPrice,
         0, // debt.
       ].join(', ');
-      await assertEvent(tx, `OrderSettled(${orderSettledEventProperties})`, PerpMarketProxy);
+      await assertEvent(tx, `OrderSettled(${orderSettledEventArgs})`, PerpMarketProxy);
 
       // There should be no order.
       const pendingOrder2 = await PerpMarketProxy.getOrderDigest(trader.accountId, marketId);
@@ -1165,6 +1165,7 @@ describe('OrderModule', () => {
       });
       const { receipt } = await commitAndSettle(bs, marketId, trader, closeOrder);
       const { accruedFunding } = findEventSafe(receipt, 'OrderSettled', PerpMarketProxy)?.args;
+
       // Funding should not be zero.
       assertBn.lt(accruedFunding, bn(0));
       // Assert that we paid a lot of funding, due to holding our position open for a day.
@@ -1184,6 +1185,7 @@ describe('OrderModule', () => {
       const { accruedFunding: accruedFunding2 } = findEventSafe(receipt2, 'OrderSettled', PerpMarketProxy)?.args;
 
       assertBn.lt(accruedFunding2, bn(0));
+
       // Assert that we paid tiny amount of funding, since we closed instantly
       assertBn.lt(accruedFunding2.mul(-1), bn(1));
     });

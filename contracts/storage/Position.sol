@@ -69,7 +69,7 @@ library Position {
         uint256 entryUtilizationAccrued;
         // The fill price at which this position was settled with.
         uint256 entryPrice;
-        // Accured static fees in USD incurred to manage this position (e.g. keeper + order + liqRewards + xyz).
+        // Accrued static fees in USD incurred to manage this position (e.g. keeper + order + liqRewards + xyz).
         uint256 accruedFeesUsd;
     }
 
@@ -210,7 +210,7 @@ library Position {
                 revert ErrorUtil.PositionFlagged();
             }
 
-            // Detearmine if the current (previous) position can be immediately liquidated.
+            // Determine if the current (previous) position can be immediately liquidated.
             if (isLiquidatable(currentPosition, market, params.oraclePrice, marketConfig, marginValues)) {
                 revert ErrorUtil.CanLiquidatePosition();
             }

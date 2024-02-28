@@ -41,6 +41,8 @@ contract OrderModule is IOrderModule {
         int256 pnl;
         uint256 fillPrice;
         uint128 accountDebt;
+        uint128 updatedMarketSize;
+        int128 updatedMarketSkew;
         Position.ValidatedTrade trade;
         Position.TradeParams params;
     }
@@ -237,12 +239,7 @@ contract OrderModule is IOrderModule {
         PerpMarketConfiguration.GlobalData storage globalConfig = PerpMarketConfiguration.load();
         PerpMarketConfiguration.Data storage marketConfig = PerpMarketConfiguration.load(marketId);
 
-        // NOTE: It's critical this step to parse and update Pyth prices is performed at the beginning of settlement.
-        //
-        // There are downstream operations both within this market but also in other markets (that share the same oracle)
-        // which rely on the most recent price available for access.
         runtime.pythPrice = PythUtil.parsePythPrice(globalConfig, marketConfig, order.commitmentTime, priceUpdateData);
-
         runtime.fillPrice = Order.getFillPrice(market.skew, marketConfig.skewScale, order.sizeDelta, runtime.pythPrice);
         runtime.params = Position.TradeParams(
             order.sizeDelta,
@@ -255,7 +252,6 @@ contract OrderModule is IOrderModule {
         );
 
         validateOrderPriceReadiness(globalConfig, order.commitmentTime, runtime.params);
-
         recomputeFunding(market, runtime.pythPrice);
 
         runtime.trade = Position.validateTrade(accountId, market, runtime.params);
@@ -276,9 +272,10 @@ contract OrderModule is IOrderModule {
             marginValues
         );
 
-        market.skew = market.skew + runtime.trade.newPosition.size - position.size;
-        market.size = (market.size.to256() + MathUtil.abs(runtime.trade.newPosition.size) - MathUtil.abs(position.size))
-            .to128();
+        runtime.updatedMarketSize = (market.size.to256() + MathUtil.abs(runtime.trade.newPosition.size) - MathUtil.abs(position.size)).to128();
+        runtime.updatedMarketSkew = market.skew + runtime.trade.newPosition.size - position.size;
+        market.skew = runtime.updatedMarketSkew;
+        market.size = runtime.updatedMarketSize;
 
         // We want to validateTrade and update market size before we recompute utilisation
         // 1. The validateTrade call getMargin to figure out the new margin, this should be using the utilisation rate up to this point
@@ -326,6 +323,8 @@ contract OrderModule is IOrderModule {
             runtime.fillPrice,
             runtime.accountDebt
         );
+
+        emit MarketSizeUpdated(marketId, runtime.updatedMarketSize, runtime.updatedMarketSkew);
 
         // Validate and perform the hook post settlement execution.
         validateOrderHooks(order.hooks);
