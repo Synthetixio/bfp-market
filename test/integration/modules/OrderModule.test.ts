@@ -40,7 +40,7 @@ import { calcFillPrice, calcOrderFees } from '../../calculations';
 import { PerpMarketProxy } from '../../generated/typechain';
 import { shuffle } from 'lodash';
 
-describe('OrderModule', () => {
+describe.only('OrderModule', () => {
   const bs = bootstrap(genBootstrap());
   const {
     systems,
@@ -905,7 +905,7 @@ describe('OrderModule', () => {
       assertBn.equal(marketDigest.skew, order.sizeDelta);
     });
 
-    it('should update totalTraderDebtUsd and account debt when settling a winning position', async () => {
+    it('should handle winning position with debt', async () => {
       const { PerpMarketProxy } = systems();
 
       const { trader, marketId, collateralDepositAmount, market, collateral } = await depositMargin(
@@ -962,8 +962,9 @@ describe('OrderModule', () => {
       const winningOrder = await genOrder(bs, market, collateral, collateralDepositAmount, {
         desiredLeverage: 2,
       });
-      await commitAndSettle(bs, marketId, trader, winningOrder);
+      const { receipt: winningOrderReceipt } = await commitAndSettle(bs, marketId, trader, winningOrder);
 
+      const winningOrderOpenEvent = findEventSafe(winningOrderReceipt, 'OrderSettled', PerpMarketProxy);
       // Price change causing 50% win.
       const newPrice1 = winningOrder.sizeDelta.gt(0)
         ? wei(winningOrder.oraclePrice).mul(1.5)
@@ -986,8 +987,20 @@ describe('OrderModule', () => {
         marketId
       );
       const usdCollateral = depositedCollateralsAfter.find((c) => c.synthMarketId.eq(SYNTHETIX_USD_MARKET_ID));
+      const orderFees = wei(winningOrderOpenEvent.args.orderFee).add(closeWinningEvent?.args.orderFee);
+      const keeperFees = wei(winningOrderOpenEvent.args.keeperFee).add(closeWinningEvent?.args.keeperFee);
+
+      const fees = orderFees.add(keeperFees);
+      const expectedUsdCollateralDiff = wei(closeWinningEvent.args.pnl)
+        .sub(fees)
+        .add(closeWinningEvent.args.accruedFunding)
+        .sub(closeWinningEvent.args.accruedUtilization)
+        .sub(closeEvent.args.accountDebt);
+
+      const expectedUsdCollateral = wei(usdCollateralBeforeWinningPos!.available).add(expectedUsdCollateralDiff);
+
       // The profit is bigger than debt, make sure sUSD collateral gets increased.
-      assertBn.gt(usdCollateral!.available, usdCollateralBeforeWinningPos!.available);
+      assertBn.equal(expectedUsdCollateral.toBN(), usdCollateral!.available);
 
       // Make sure totalTraderDebt and accountDebt are decreased.
       assertBn.equal(totalTraderDebtUsd, closeWinningEvent.args.accountDebt);
