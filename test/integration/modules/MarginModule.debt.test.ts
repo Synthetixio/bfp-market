@@ -1,6 +1,7 @@
 import assertBn from '@synthetixio/core-utils/utils/assertions/assert-bignumber';
 import assertEvent from '@synthetixio/core-utils/utils/assertions/assert-event';
 import assertRevert from '@synthetixio/core-utils/utils/assertions/assert-revert';
+import assert from 'assert';
 import Wei, { wei } from '@synthetixio/wei';
 import { bootstrap } from '../../bootstrap';
 import { calcPnl, calcTransactionCostInUsd } from '../../calculations';
@@ -18,7 +19,6 @@ import {
   setBaseFeePerGas,
   withExplicitEvmMine,
 } from '../../helpers';
-import assert from 'assert';
 
 describe('MarginModule Debt', async () => {
   const bs = bootstrap(genBootstrap());
@@ -220,6 +220,7 @@ describe('MarginModule Debt', async () => {
       const { debtUsd: debtAfter } = await PerpMarketProxy.getAccountDigest(trader.accountId, marketId);
       assertBn.isZero(debtAfter);
     });
+
     it('should remove debt using sUSD collateral when user have some', async () => {
       const { PerpMarketProxy } = systems();
 
@@ -288,6 +289,7 @@ describe('MarginModule Debt', async () => {
       assertBn.equal(sUSDBalanceAfter, extraSUSDBalance);
     });
   });
+
   describe('isMarginLiquidatable', () => {
     it('should revert on invalid market id', async () => {
       const { PerpMarketProxy } = systems();
@@ -299,6 +301,7 @@ describe('MarginModule Debt', async () => {
         `MarketNotFound("${invalidMarketId}")`
       );
     });
+
     it('should revert on invalid account id', async () => {
       const { PerpMarketProxy } = systems();
       const invalidAccountId = genNumber(42069, 50000);
@@ -355,6 +358,7 @@ describe('MarginModule Debt', async () => {
       assert.equal(isMarginLiquidatableAfter, true);
     });
   });
+
   describe('liquidateMarginOnly', () => {
     it('should revert on invalid market id', async () => {
       const { PerpMarketProxy } = systems();
@@ -366,6 +370,7 @@ describe('MarginModule Debt', async () => {
         `MarketNotFound("${invalidMarketId}")`
       );
     });
+
     it('should revert on invalid account id', async () => {
       const { PerpMarketProxy } = systems();
       const invalidAccountId = genNumber(42069, 50000);
@@ -389,6 +394,7 @@ describe('MarginModule Debt', async () => {
         `PositionFound("${trader.accountId}", "${marketId}")`
       );
     });
+
     it('should revert if margin cant be liquidated', async () => {
       const { PerpMarketProxy } = systems();
 
