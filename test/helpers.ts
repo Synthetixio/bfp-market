@@ -342,10 +342,10 @@ export const withExplicitEvmMine = async (
   await provider.send('evm_setAutomine', [false]);
 
   const tx = await f();
-  await provider.send('anvil_mine', []);
-  await provider.send('evm_setAutomine', [true]);
+  await provider.send('evm_mine', []);
 
   const receipt = await tx.wait();
+  await provider.send('evm_setAutomine', [true]);
 
   return { tx, receipt };
 };

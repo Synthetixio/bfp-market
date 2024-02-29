@@ -405,12 +405,6 @@ export const bootstrap = (args: GeneratedBootstrap) => {
       })
   );
 
-  before('explicit anvil configure', async () => {
-    const provider = getProvider();
-    await provider.send('evm_setAutomine', [true]);
-    await provider.send('evm_setIntervalMining', [1000]);
-  });
-
   const restore = snapshotCheckpoint(core.provider);
 
   return {
