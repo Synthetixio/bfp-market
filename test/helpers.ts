@@ -90,7 +90,8 @@ export const mintAndApproveWithTrader = async (bs: Bs, gTrader: GeneratedTrader)
 
 /** Returns a generated trader with collateral and market details. */
 export const depositMargin = async (bs: Bs, gTrader: GeneratedTrader) => {
-  const { PerpMarketProxy } = bs.systems();
+  const { systems, provider } = bs;
+  const { PerpMarketProxy } = systems();
 
   // Provision collateral and approve for access.
   const { market, trader, collateral, collateralDepositAmount } = await mintAndApproveWithTrader(bs, gTrader);
@@ -103,7 +104,7 @@ export const depositMargin = async (bs: Bs, gTrader: GeneratedTrader) => {
         collateral.synthMarketId(),
         collateralDepositAmount
       ),
-    bs.provider()
+    provider()
   );
 
   return gTrader;
