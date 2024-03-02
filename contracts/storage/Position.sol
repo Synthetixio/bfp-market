@@ -201,6 +201,7 @@ library Position {
         PerpMarketConfiguration.Data storage marketConfig = PerpMarketConfiguration.load(market.id);
 
         // --- Existing position validation --- //
+
         Margin.MarginValues memory marginValues = Margin.getMarginUsd(accountId, market, params.fillPrice);
 
         // There's an existing position. Make sure we have a valid existing position before allowing modification.
@@ -236,16 +237,17 @@ library Position {
             orderFee + keeperFee
         );
 
-        // We care about discount as as we're verifying for liquidation.
-        // NOTE: marginUsd looks at the current position's overall PnL but it does not consider the post settled
-        // incurred fees hence get `nextMarginUsd` with fees deducted.
-        uint256 nextMarginUsd = getNextMarginUsd(marginValues.discountedMarginUsd, orderFee, keeperFee);
-
         // Minimum position margin checks, however if a position is decreasing (i.e. derisking by lowering size), we
         // avoid this completely due to positions at min margin would never be allowed to lower size.
         bool positionDecreasing = MathUtil.sameSide(currentPosition.size, newPosition.size) &&
             MathUtil.abs(newPosition.size) < MathUtil.abs(currentPosition.size);
         if (!positionDecreasing) {
+            // We need discounted collateral as as we're verifying for liquidation here.
+            //
+            // NOTE: `marginUsd` looks at the current overall PnL but it does not consider the 'post' settled
+            // incurred fees hence get `getNextMarginUsd` -fees.
+            uint256 nextMarginUsd = getNextMarginUsd(marginValues.discountedMarginUsd, orderFee, keeperFee);
+
             // Check new position initial margin validations.
             validateNextPositionIm(marketConfig, newPosition, marginValues.collateralUsd, nextMarginUsd);
             // Check new position margin validations.
@@ -260,8 +262,7 @@ library Position {
                 newPosition,
                 orderFee,
                 keeperFee,
-                // For everything else, we actually need to use the unadjusted marginUsd as the collateral discount is only
-                // applicable for liquidation related checks.
+                // NOTE: Notice the lack of discounted margin.
                 getNextMarginUsd(marginValues.marginUsd, orderFee, keeperFee)
             );
     }
