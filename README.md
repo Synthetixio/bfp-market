@@ -1,5 +1,7 @@
 # bfp-market
 
+> :warning: **IMPORTANT**: :warning: This repository has been deprecated, and its market functionality has been merged into [synthetix-v3](https://github.com/Synthetixio/synthetix-v3). Users are recommended to refer to [PR#2018](https://github.com/Synthetixio/synthetix-v3/pull/2018) for details. Ongoing development will be exclusively in the synthetix-v3 repository, and users are advised to transition accordingly.
+
 **Welcome to bfp-market!**
 
 The _big ~~fucking~~ freaking perp market_ (or just BFP-Market) is a perpetual swap market, leveraging the capabilities of Synthetix v3 as its underlying infrastructure. bfp-market inherits core features from [v2x](https://github.com/Synthetixio/synthetix/tree/develop/contracts), such as dynamic funding rates, PD (Premium/Discount) adjusted market prices, and asynchronous hybrid oracle-based order executions through [Pyth](https://pyth.network/).
